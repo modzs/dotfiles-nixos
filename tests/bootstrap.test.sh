@@ -175,7 +175,7 @@ run_script() {
   printf '%s' "$input" \
     | env HOME="$sb/home" PATH="$path" \
         GIT_CONFIG_NOSYSTEM=1 XDG_CONFIG_HOME="$sb/home/.config" \
-        /bin/bash "$sb/$repo_rel/$script" \
+        "$BASH" "$sb/$repo_rel/$script" \
       >"$sb/out" 2>&1 || status=$?
   printf '%s\n' "$status"
 }

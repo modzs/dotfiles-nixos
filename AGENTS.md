@@ -129,6 +129,14 @@ Deliberate decisions in this repo - do NOT silently revert them:
   them. `bootstrap.sh` still rewrites `flake.nix` through a temp file and a rename, because that
   is atomic for a file the machine's identity depends on, and because it lets the suite exercise
   the real script rather than skipping it.
+- **There is no `/bin/bash` on NixOS.** The system creates only `/bin/sh` and `/usr/bin/env`, so
+  every script here carries a `#!/usr/bin/env bash` shebang, and nothing may name an absolute
+  interpreter path. `tests/run.sh` executes each suite directly and lets that shebang resolve bash
+  through PATH; the two places that hand a script to an interpreter - `tests/npm-globals.test.sh`
+  and `tests/bootstrap.test.sh`'s `run_script` - use `"$BASH"`, the running interpreter's own
+  path, because one of them pins PATH down on purpose to prove a tool is missing from it. CI runs
+  on ubuntu, where `/bin/bash` does exist, so no test can catch a regression here for you.
+  `home.nix`'s `${pkgs.bash}/bin/bash` is a store path, not this, and is correct as it stands.
 - **`tests/pi-calm.test.sh` asserts the `~/.pi/agent/extensions` Home Manager link against the
   tracked `home.nix` text, and that is a deliberate, settled exception** to this repo's general
   preference for executing behaviour over reading source. An evaluated form has to reach

@@ -98,7 +98,7 @@ if [ -z "$FLAKE_USER" ]; then
   exit 1
 elif [ "$FLAKE_USER" != "$REAL_USER" ]; then
   echo "    flake.nix is configured for user \"$FLAKE_USER\", but you are \"$REAL_USER\"."
-  read -r -p "    Rewrite flake.nix's \"user = \" line to \"$REAL_USER\"? [y/N] " REPLY
+  read -r -p "    Rewrite flake.nix's \"user = \" line to \"$REAL_USER\"? [y/N] " REPLY || true
   if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     rewrite_flake_line user "$REAL_USER"
     echo "    Updated. Review the change with: git diff flake.nix"

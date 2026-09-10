@@ -90,10 +90,10 @@ run_npm_globals() {
     *) fail "refusing to run with a prefix outside the test temp root" ;;
   esac
   if [ "$mode" = dry ]; then
-    env DRY_RUN=1 /bin/bash "$SCRIPT" "$sb/nodebin" "$sb/prefix" "$@" \
+    env DRY_RUN=1 "$BASH" "$SCRIPT" "$sb/nodebin" "$sb/prefix" "$@" \
       >"$sb/out" 2>"$sb/err" || status=$?
   else
-    env -u DRY_RUN /bin/bash "$SCRIPT" "$sb/nodebin" "$sb/prefix" "$@" \
+    env -u DRY_RUN "$BASH" "$SCRIPT" "$sb/nodebin" "$sb/prefix" "$@" \
       >"$sb/out" 2>"$sb/err" || status=$?
   fi
   printf '%s\n' "$status"
@@ -106,7 +106,7 @@ run_npm_globals() {
 run_npm_globals_raw() {
   local sb=$1 status=0
   shift
-  ( cd "$sb" && env -u DRY_RUN /bin/bash "$SCRIPT" "$@" ) \
+  ( cd "$sb" && env -u DRY_RUN "$BASH" "$SCRIPT" "$@" ) \
     >"$sb/out" 2>"$sb/err" || status=$?
   printf '%s\n' "$status"
 }

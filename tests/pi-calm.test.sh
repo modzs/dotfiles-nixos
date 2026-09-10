@@ -572,6 +572,15 @@ test_real_pi_tui_smoke() {
     tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" >"$fixture/captures/$label.current.ansi.txt" 2>/dev/null || true
     tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.ansi.txt" 2>/dev/null || true
   }
+  calm_is() { [ "$(cat "$agent/calm" 2>/dev/null)" = "$1" ]; }
+  wait_until() {
+    local i
+    for ((i = 0; i < 600; i++)); do
+      "$@" && return 0
+      sleep 0.05
+    done
+    return 1
+  }
   cp -R "$CALM_DIR" "$agent/extensions/"
   cat >"$project/provider.ts" <<'TS'
 import { appendFileSync } from "node:fs";
@@ -624,7 +633,7 @@ TS
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
     "cd '$project' && env PI_CODING_AGENT_DIR='$agent' PI_CODING_AGENT_SESSION_DIR='$fixture/sessions' PI_OFFLINE=1 CALM_SMOKE_MARKERS='$fixture/provider-markers.txt' pi --approve --no-context-files --no-skills --no-prompt-templates -e ./provider.ts"
-  for _ in $(seq 1 120); do
+  for _ in $(seq 1 1200); do
     tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'provider.ts' "$fixture/pane" && break
     sleep 0.05
@@ -633,11 +642,11 @@ TS
   capture_tui ready
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  sleep 0.2
+  wait_until calm_is on || fail "real Pi smoke did not act on the first /calm command"
   capture_tui after-calm
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  for _ in $(seq 1 120); do
+  for _ in $(seq 1 3000); do
     if [ -f "$fixture/provider-markers.txt" ] && grep -Fq 'stream-start' "$fixture/provider-markers.txt"; then
       capture_tui working-wide
       tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/wide" 2>/dev/null || true
@@ -648,7 +657,7 @@ TS
   grep -Fq 'stream-start' "$fixture/provider-markers.txt" || fail "real Pi smoke did not enter the provider stream"
   grep -Fq '\__/' "$fixture/wide" || fail "real Pi smoke did not show Calm's wide working boat"
   tmux -L "$TMUX_SOCKET" resize-window -t "$TMUX_SESSION" -x 40 -y 30
-  for _ in $(seq 1 120); do
+  for _ in $(seq 1 3000); do
     capture_tui working-narrow
     tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/narrow" 2>/dev/null || true
     grep -Fq '\__/' "$fixture/narrow" && break
@@ -656,7 +665,7 @@ TS
     sleep 0.02
   done
   grep -Fq '\__/' "$fixture/narrow" || fail "real Pi smoke did not reflow Calm's working boat on resize"
-  for _ in $(seq 1 120); do
+  for _ in $(seq 1 1200); do
     tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'CALM_SMOKE_GENUINE_ASSISTANT' "$fixture/pane" && break
     sleep 0.05
@@ -667,8 +676,7 @@ TS
   [ "$(cat "$agent/calm")" = on ] || fail "real Pi smoke did not persist Calm on"
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  sleep 0.15
-  [ "$(cat "$agent/calm")" = off ] || fail "real Pi smoke did not persist Calm off"
+  wait_until calm_is off || fail "real Pi smoke did not persist Calm off"
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/quit'
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   sleep 0.1

@@ -107,6 +107,10 @@ test_nixpkgs_supplied_packages_are_all_prebuilt() {
   # it would fail this check forever, for a reason that has nothing to do with
   # the channel. They are named in the result instead, so the exclusion is
   # visible rather than silent.
+  #
+  # Single-quoted on purpose: the ${...} below are Nix string interpolations,
+  # evaluated by nix, and the shell must not touch them.
+  # shellcheck disable=SC2016
   report=$(nix eval --raw --no-write-lock-file --apply 'cfg:
     let
       src = toString cfg.pkgs.path;

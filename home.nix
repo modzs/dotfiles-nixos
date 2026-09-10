@@ -25,7 +25,12 @@ in
 {
   home.username = user;
   home.homeDirectory = "/home/${user}";
-  home.stateVersion = "24.11";
+  # The Home Manager release this configuration was first written against, and
+  # the same release configuration.nix pins. It is not the sibling repo's value:
+  # that one records when *that* machine was first set up, and no machine has
+  # ever run this one. Like system.stateVersion, it pins stateful defaults rather
+  # than naming a version to keep current.
+  home.stateVersion = "26.05";
   home.packages = with pkgs; [
     # cli i use constantly
     ripgrep   # fast search

@@ -39,7 +39,7 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - name: Evaluate the flake
-        run: nix flake check
+        run: nix flake check --all-systems
 
       # Resolves the whole derivation graph and asks the substituters what they
       # can serve, without building or downloading any of it. It catches what

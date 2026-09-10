@@ -54,6 +54,11 @@ Deliberate decisions in this repo - do NOT silently revert them:
   tree here. It is here for the remaining half: a Nix-provided node's own `npm prefix -g` is a
   read-only store path, so `npm install -g` has nowhere to write without it. Do not carry the
   Homebrew half of that explanation across, and do not remove the variable.
+- **`NODE_EXTRA_CA_CERTS` was dropped on purpose and must not be restored from the sibling repo.**
+  There it points every Node at the CA bundle because a *Homebrew*-built node looks for roots in
+  an empty `/opt/homebrew/etc/openssl@3`. There is no Homebrew node here, and NixOS already puts
+  the system bundle where OpenSSL looks, so the variable would state a fact rather than fix a
+  problem.
 - **`herdr` and `no-mistakes` are not in nixpkgs and are deliberately manual.** herdr has no
   nixpkgs attribute at all - verify before claiming otherwise, and do not invent one; README.md
   and HOW-TO.md name its own install script and upstream flake. `no-mistakes` is absent for a

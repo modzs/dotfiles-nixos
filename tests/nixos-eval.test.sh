@@ -58,6 +58,10 @@ collect_facts() {
   # `builtins.attrNames` of the Home Manager users, rather than re-parsing
   # flake.nix: the fact worth asserting is what the evaluated configuration says
   # about its user, not what a regex finds in a file.
+  #
+  # Single-quoted on purpose: the ${...} below are Nix string interpolations,
+  # evaluated by nix, and the shell must not touch them.
+  # shellcheck disable=SC2016
   expr='cfg:
     let
       user = builtins.head (builtins.attrNames cfg.config.home-manager.users);

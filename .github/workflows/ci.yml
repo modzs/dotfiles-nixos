@@ -1,0 +1,128 @@
+name: CI
+
+# Runs on every pull request, and on main after a merge. Feature branches are
+# covered through their pull request, so a same-repo branch does not build twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The flake's only output is a NixOS configuration for x86_64-linux, so this
+  # runs on a Linux runner - the same platform the configuration is for.
+  #
+  # It EVALUATES the configuration; it does not build the closure. Evaluating
+  # `system.build.toplevel` down to a derivation path type-checks every NixOS,
+  # Home Manager and repo-local module and resolves every package attribute,
+  # option name and value against the pinned nixpkgs. That is the whole class of
+  # breakage a configuration can have before anyone owns the machine it is for.
+  #
+  # Building the closure would additionally prove that every derivation in it
+  # compiles, but a full GNOME system is tens of gigabytes of downloads on a
+  # runner with neither the disk nor the time for it, and `--dry-run` below
+  # already resolves the entire graph and confirms the cache can serve it.
+  # Nothing here activates or boots anything, and README.md says so plainly.
+  evaluate:
+    name: Evaluate the NixOS configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Determinate Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Evaluate the flake
+        run: nix flake check
+
+      # Resolves the whole derivation graph and asks the substituters what they
+      # can serve, without building or downloading any of it. It catches what
+      # `nix flake check` cannot: a derivation that exists but that nothing has
+      # built and nothing can fetch.
+      - name: Resolve the full system closure
+        run: |
+          nix build --dry-run --print-build-logs \
+            .#nixosConfigurations.pc.config.system.build.toplevel
+
+  # Everything the suite needs is installed here on purpose. A bare runner has
+  # no Pi package and no tmux, so a naive run would skip most of its checks and
+  # still report success - which is exactly the failure this workflow exists to
+  # prevent. --strict turns any remaining skip into a failure, so CI cannot go
+  # green on checks that never ran.
+  test:
+    name: Test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Matches the nodejs_26 that home.nix installs.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26
+
+      # tests/repo-hygiene.test.sh reads herdr's config.toml with a real TOML
+      # parser, which means python3 >= 3.11 for tomllib. tests/docs_model.py
+      # needs a python3 too. The runner image's own python3 is not guaranteed to
+      # be new enough, so the version is pinned here rather than left to chance -
+      # otherwise those checks would skip and --strict would fail.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      # tests/nixos-eval.test.sh evaluates the configuration and
+      # tests/nixpkgs-channel.test.sh evaluates the installed package set, so
+      # the suite needs nix too - without it those checks would skip, and
+      # --strict would fail.
+      - name: Install Determinate Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      # Pinned to the version tests/pi-calm.test.sh names as its TUI proof
+      # target, so an upstream Pi release cannot turn CI red on its own.
+      # --ignore-scripts matches the install command documented in README.md.
+      - name: Install the Pi proof target and TypeScript
+        run: |
+          npm install --prefix "$RUNNER_TEMP/npm" --global --no-fund --no-audit \
+            --ignore-scripts @earendil-works/pi-coding-agent@0.82.0 typescript
+          echo "$RUNNER_TEMP/npm/bin" >>"$GITHUB_PATH"
+          echo "PI_CALM_TEST_PACKAGE_DIR=$RUNNER_TEMP/npm/lib/node_modules/@earendil-works/pi-coding-agent" \
+            >>"$GITHUB_ENV"
+
+      - name: Run the test suite
+        run: ./tests/run.sh --strict
+
+  # The test suite only exercises the paths it happens to reach. shellcheck
+  # catches the rest - unquoted expansions, dead assignments, misused test
+  # operators - so the repo's shell is checked rather than trusted. It needs no
+  # Nix and no Pi, so it reports long before the two jobs above finish.
+  lint:
+    name: Shell lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned rather than using whatever shellcheck the runner image ships, so
+      # a new upstream release that adds a check cannot turn CI red on its own.
+      # The checksum is verified because this job downloads an executable.
+      - name: Install shellcheck
+        run: |
+          version=0.11.0
+          sha256=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          curl --fail --silent --show-error --location \
+            "https://github.com/koalaman/shellcheck/releases/download/v$version/shellcheck-v$version.linux.x86_64.tar.xz" \
+            -o "$RUNNER_TEMP/shellcheck.tar.xz"
+          echo "$sha256  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum --check --strict
+          tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP" \
+            --strip-components=1 "shellcheck-v$version/shellcheck"
+          echo "$RUNNER_TEMP" >>"$GITHUB_PATH"
+
+      - name: Run shellcheck
+        run: shellcheck bootstrap.sh rebuild.sh lib/*.sh tests/*.sh

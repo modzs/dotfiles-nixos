@@ -131,11 +131,12 @@ Deliberate decisions in this repo - do NOT silently revert them:
   the real script rather than skipping it.
 - **There is no `/bin/bash` on NixOS.** The system creates only `/bin/sh` and `/usr/bin/env`, so
   every script here carries a `#!/usr/bin/env bash` shebang, and nothing may name an absolute
-  interpreter path. `tests/run.sh` executes each suite directly and lets that shebang resolve bash
-  through PATH; the two places that hand a script to an interpreter - `tests/npm-globals.test.sh`
-  and `tests/bootstrap.test.sh`'s `run_script` - use `"$BASH"`, the running interpreter's own
-  path, because one of them pins PATH down on purpose to prove a tool is missing from it. CI runs
-  on ubuntu, where `/bin/bash` does exist, so no test can catch a regression here for you.
+  interpreter path. Every place that dispatches a script - `tests/run.sh`,
+  `tests/npm-globals.test.sh` and `tests/bootstrap.test.sh`'s `run_script` - hands it to
+  `"$BASH"`, the path PATH resolved for the running interpreter at startup. That form neither
+  names a `/bin` path nor depends on the dispatched file's executable bit, and it survives the one
+  case that pins PATH down on purpose to prove a tool is missing from it. CI runs on ubuntu, where
+  `/bin/bash` does exist, so no test can catch a regression here for you.
   `home.nix`'s `${pkgs.bash}/bin/bash` is a store path, not this, and is correct as it stands.
 - **`tests/pi-calm.test.sh` asserts the `~/.pi/agent/extensions` Home Manager link against the
   tracked `home.nix` text, and that is a deliberate, settled exception** to this repo's general

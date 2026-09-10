@@ -26,7 +26,7 @@ suites=0
 for suite in "$ROOT"/tests/*.test.sh; do
   suites=$((suites + 1))
   printf '# %s\n' "${suite#"$ROOT"/}"
-  "$suite" "$@" || status=1
+  "$BASH" "$suite" "$@" || status=1
 done
 
 passed=0

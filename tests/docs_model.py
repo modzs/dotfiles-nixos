@@ -1,10 +1,11 @@
 """Semantic model of this repo's Markdown documents, for tests/docs-links.test.sh.
 
-Two models, both derived from the rendered meaning of a document rather than
-its bytes:
+Models derived from the rendered meaning of a document rather than its bytes:
 
   headings(doc)  the anchors GitHub generates for the document's headings,
                  which is what a `#fragment` link actually resolves against.
+  links(doc)     every Markdown link the document renders, including one whose
+                 label wraps across a newline.
   recipes(doc)   each fenced block reduced to the sequence of commands it runs,
                  so two blocks that differ only in comments or blank lines are
                  recognized as the same procedure.
@@ -105,34 +106,51 @@ def recipes(lines):
     return found
 
 
+def links(lines):
+    """(line number, label, target) for every Markdown link in the document.
+
+    Matched against the joined text rather than line by line: a link's label may
+    wrap across a newline, and a per-line regex never sees such a link at all.
+    The line number is derived from the match offset, so a report still names the
+    line the link starts on, and the label's own newline is folded to a space."""
+    text = "\n".join(lines)
+    return [
+        (
+            text.count("\n", 0, match.start()) + 1,
+            " ".join(match.group(1).split()),
+            match.group(2),
+        )
+        for match in LINK.finditer(text)
+    ]
+
+
 def check_links(root, docs):
     anchors = {name: headings(lines) for name, lines in docs.items()}
     broken = []
     resolved = 0
     for name, lines in docs.items():
-        for lineno, line in enumerate(lines, 1):
-            for label, target in LINK.findall(line):
-                if target.startswith(("http://", "https://", "mailto:")):
-                    continue
-                path, _, fragment = target.partition("#")
-                where = "%s:%d [%s](%s)" % (name, lineno, label, target)
-                doc = name if path == "" else os.path.normpath(path)
-                if not os.path.exists(os.path.join(root, doc)):
-                    broken.append("%s -> no such file %s" % (where, doc))
-                    continue
-                if not fragment:
-                    resolved += 1
-                    continue
-                if doc not in anchors:
-                    broken.append("%s -> %s is not a checked document" % (where, doc))
-                    continue
-                if fragment not in anchors[doc]:
-                    broken.append(
-                        "%s -> %s has no heading with anchor #%s" % (where, doc, fragment)
-                    )
-                    continue
+        for lineno, label, target in links(lines):
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            path, _, fragment = target.partition("#")
+            where = "%s:%d [%s](%s)" % (name, lineno, label, target)
+            doc = name if path == "" else os.path.normpath(path)
+            if not os.path.exists(os.path.join(root, doc)):
+                broken.append("%s -> no such file %s" % (where, doc))
+                continue
+            if not fragment:
                 resolved += 1
-                print("%s -> %s: %s" % (where, doc, anchors[doc][fragment]))
+                continue
+            if doc not in anchors:
+                broken.append("%s -> %s is not a checked document" % (where, doc))
+                continue
+            if fragment not in anchors[doc]:
+                broken.append(
+                    "%s -> %s has no heading with anchor #%s" % (where, doc, fragment)
+                )
+                continue
+            resolved += 1
+            print("%s -> %s: %s" % (where, doc, anchors[doc][fragment]))
     print("%d relative link(s) resolved, %d broken" % (resolved, len(broken)))
     for entry in broken:
         print("BROKEN " + entry)

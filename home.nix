@@ -42,12 +42,10 @@ in
     gh        # github cli
     # Neovim's `clipboard = 'unnamedplus'` (home/.config/nvim/lua/vim_config.lua)
     # needs an external provider on Linux. On macOS it found pbcopy/pbpaste in
-    # the base system; NixOS's GNOME ships neither of these, so without them the
-    # setting is inert and yanks never leave nvim. wl-clipboard is the Wayland
-    # one GNOME's default session uses, xclip the X11 fallback for an XWayland
-    # or Xorg session.
+    # the base system; NixOS's GNOME ships neither, so without one the setting is
+    # inert and a yank never leaves nvim. The GNOME session this configuration
+    # presents is Wayland, so wl-clipboard is the provider Neovim will use.
     wl-clipboard
-    xclip
     # Node itself, so the version is declared and pinned by flake.lock rather
     # than by whatever a distro package manager happens to ship.
     nodejs_26

@@ -57,8 +57,8 @@ same machine.
 
 - Everything goes through the rebuild. You cannot `pip install` something into the system, and
   a tool that expects to write to `/usr/lib` will not work as its author intended.
-- Software that is not in Nixpkgs is real work to add. This repo has two such tools, and both
-  are documented below as manual steps rather than pretended away.
+- Software that is not in Nixpkgs is real work to add. `herdr` and `no-mistakes` are like that
+  here, and both are documented below as manual steps rather than pretended away.
 - The error messages are about Nix expressions, not about your machine, and they take a while to
   learn to read. [Troubleshooting](HOW-TO.md#troubleshooting) covers the ones you will hit first.
 - Disk usage is higher, because keeping old generations is what makes rollback work.
@@ -87,16 +87,16 @@ Running the switch builds:
 - Network access on the first switch, and on any switch that changes a pinned npm CLI version.
 - `herdr` and `no-mistakes`, which this repo does not install for you. Both are documented in
   [Part 6](HOW-TO.md#part-6-customizing-your-setup).
-- Of the three agents the installed configs are for - Claude, Codex, opencode - only Claude Code
+- Of the agents the installed configs are for - Claude, Codex, opencode - only Claude Code
   itself is installed. The Codex and opencode configs are written either way, so they are ready
   if you install those tools yourself; until then the `co` alias for `codex` has nothing to run.
 
 ## Architecture
 
-Four Nix files, in the order Nix reads them:
+The Nix files, in the order Nix reads them:
 
 - **`flake.nix`** is the entry point, and the only file with your name in it. It declares one
-  output, `nixosConfigurations.pc`, pins its inputs in `flake.lock`, and defines the two
+  output, `nixosConfigurations.pc`, pins its inputs in `flake.lock`, and defines the
   variables everything else is threaded from: `user` and `hostName`. Both are lines
   `bootstrap.sh` can rewrite for you.
 - **`configuration.nix`** is the system: boot loader, networking, time zone and locale, the user
@@ -111,7 +111,7 @@ The flake output is named `pc`, and the machine's name is a separate value. They
 not follow each other: `pc` is a stable identifier that `bootstrap.sh`, `rebuild.sh` and CI all
 name explicitly, so renaming the machine cannot break the commands.
 
-Supporting the four:
+Supporting them:
 
 - `bootstrap.sh` - one-time setup on a newly installed NixOS: the `~/.dotfiles` link, the
   username, the machine name, the git identity, the real hardware description, and the first switch.
@@ -156,7 +156,7 @@ that prints something with no root filesystem, leaves the existing file untouche
 
 ### Homebrew became nixpkgs
 
-The macOS config installs five things through Homebrew, with `onActivation.cleanup = "zap"` to
+The macOS config installs its packages through Homebrew, with `onActivation.cleanup = "zap"` to
 force everything to be declared. On NixOS there is nothing to reconcile: declaring packages in
 Nix *is* the package manager, so `brews` and `casks` become entries in the same list as
 everything else, and the cleanup setting has no counterpart because there is no second tree for
@@ -187,7 +187,7 @@ build, so it is fetched and built locally on the first switch rather than pulled
 
 GNOME's settings live in dconf, and Home Manager can declare them - the same database the
 Settings app writes to, so a declared key is genuinely the machine's setting rather than a file
-GNOME might ignore. Five of the nine macOS settings map cleanly:
+GNOME might ignore. These macOS settings map cleanly:
 
 | macOS | GNOME |
 |---|---|
@@ -200,7 +200,7 @@ GNOME might ignore. Five of the nine macOS settings map cleanly:
 macOS counts key repeat in 15 ms ticks and GNOME counts in milliseconds, so those two numbers are
 the same speeds in GNOME's unit, not different settings.
 
-**Four are deliberately absent, because GNOME has no equivalent.** Approximating them with
+**The rest are deliberately absent, because GNOME has no equivalent.** Approximating them with
 something that behaves differently would be worse than leaving them out:
 
 - **`dock.autohide`** - GNOME has no permanent dock. The dash exists only inside the Activities
@@ -274,7 +274,7 @@ This repo is mine. If you fork it, review these before you run `bootstrap.sh`:
   `claude --dangerously-skip-permissions` and `codex --full-auto`. They are convenient for me,
   but know what they do before you use them.
 - `home/.claude/settings.json` registers `SessionStart` hooks that run `gh-axi`,
-  `chrome-devtools-axi`, and `lavish-axi` on every Claude Code session. Those three tools
+  `chrome-devtools-axi`, and `lavish-axi` on every Claude Code session. Those tools
   generate that block themselves; it is committed here so a fresh machine gets it without
   running anything. Delete the `hooks` key if you do not want them.
 - `home/.claude/settings.json` also sets `"model": "opus"`, so every Claude Code session on this
@@ -301,8 +301,10 @@ settings, the pinned CLI versions.
 
 ## Agent toolchain
 
-Seven command-line agent tools live on this machine: Node plus five npm CLIs (`gh-axi`,
-`chrome-devtools-axi`, `lavish-axi`, `tasks-axi`, `quota-axi`), and `no-mistakes`.
+The command-line agent toolchain, as `home.nix` declares it: `nodejs_26` and `claude-code` come
+from nixpkgs in `home.packages`, the npm CLIs come from its `npmGlobals` attribute set (`gh-axi`,
+`chrome-devtools-axi`, `lavish-axi`, `tasks-axi`, `quota-axi`), and `no-mistakes` is a manual step
+this repo does not install at all.
 
 **Node comes from nixpkgs.** `home.nix` lists `nodejs_26` in `home.packages`, so the version is
 pinned by `flake.lock`. A Nix-provided node's default `npm prefix -g` is its own read-only store
@@ -310,7 +312,7 @@ path, so global npm packages have nowhere to go; this config sets
 `NPM_CONFIG_PREFIX=~/.npm-global` and puts that on `PATH`, so they land in your home directory
 instead.
 
-**The five npm CLIs are pinned.** They are not in nixpkgs, so a Home Manager activation step
+**The npm CLIs are pinned.** They are not in nixpkgs, so a Home Manager activation step
 installs each at an exact version into that prefix. The versions are the `npmGlobals` attribute
 set in `home.nix`, and it is the single source of truth: the install script in
 `lib/npm-globals.sh` takes them as arguments rather than knowing any version itself.
@@ -319,7 +321,7 @@ has the steps.
 
 Pinning is deliberate. Unpinned, a routine rebuild could silently change a tool's behaviour
 underneath you; pinned, the version only moves when you change the file and commit it. The step
-is version-guarded, so a rebuild with nothing to change reads five `package.json` files and makes
+is version-guarded, so a rebuild with nothing to change reads each CLI's `package.json` and makes
 no network calls, and a failed install prints a warning and lets the switch continue rather than
 aborting it on a machine with no network.
 
@@ -335,7 +337,7 @@ the one-time command.
 Pi is an opt-in CLI, not a dependency this repository vendors. Install it from its owner with the
 [official Pi instructions](https://pi.dev).
 
-Home Manager owns exactly two repository-authored Pi directories: `~/.pi/agent/themes` and
+Home Manager owns the repository-authored Pi directories `~/.pi/agent/themes` and
 `~/.pi/agent/extensions`. It also links `models.json` and `settings.json` as individual files.
 The local extension directory is for public, repository-authored extensions only - third-party
 package code never belongs there. Run `/reload` after editing a local extension or other Pi
@@ -354,7 +356,7 @@ in `~/.pi/agent/calm` (or the directory selected by `PI_CODING_AGENT_DIR`), not 
 repository or Home Manager. Adapted from the upstream project under the bundled MIT license,
 Calm imports no modules from it and has no runtime dependency on it.
 
-When enabled, Calm hides collapsed thinking and the call/result shells for Pi's seven built-in
+When enabled, Calm hides collapsed thinking and the call/result shells for Pi's built-in
 tools (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`) without leaving blank
 transcript rows. During an active run it replaces Pi's working row with a two-line animated
 blue-water, yellow-boat widget. `/calm` restores Pi's stock rendering and preserves the existing
@@ -367,7 +369,7 @@ filter. If a future Pi release no longer exports the exact collapsed-thinking re
 Calm logs one diagnostic and leaves only that adapter disabled; all other behavior remains
 available.
 
-Pi's package system declares two third-party sources in the linked global `settings.json`:
+Pi's package system declares these third-party sources in the linked global `settings.json`:
 
 - `npm:pi-web-access@0.14.0` - the exact public npm release for web access.
 - `npm:@ryan_nookpi/pi-extension-codex-fast-mode@0.2.6` - the exact public npm release from
@@ -379,7 +381,7 @@ updates require a new source and security audit, followed by an explicit pin cha
 packages automatically at startup. Pi keeps the downloaded npm package trees in its own unmanaged
 `~/.pi/agent/npm` runtime directory, outside Home Manager and Git tracking.
 
-Both packages execute with your full user permissions and must be trusted like any other
+These packages execute with your full user permissions and must be trusted like any other
 executable code.
 
 Home Manager deliberately does not manage `~/.pi/agent` itself, or Pi authentication, sessions,

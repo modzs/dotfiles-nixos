@@ -65,7 +65,7 @@ Deliberate decisions in this repo - do NOT silently revert them:
   different reason: its installer always fetches the latest release and restarts a daemon, which
   does not belong in an unattended switch. `home.sessionPath` carries `~/.no-mistakes/bin` so an
   installed copy survives every rebuild.
-- **Four macOS `system.defaults` have no GNOME equivalent and are omitted, not approximated**:
+- **The macOS `system.defaults` with no GNOME equivalent are omitted, not approximated**:
   dock auto-hide (GNOME has no permanent dock), auto-hidden menu bar (needs a third-party shell
   extension), clean desktop (GNOME draws no desktop icons anyway), and show-all-extensions
   (Nautilus always shows full names). README.md lists them with the reasoning. Do not "restore"

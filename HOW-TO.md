@@ -239,7 +239,7 @@ This is somebody else's machine described in a file. Read these before applying 
 
 It refuses immediately, before writing anything, if `~/.dotfiles` is already something else, or
 if `nixos-rebuild`, `nixos-generate-config` or `git` is not on your `PATH`. Then it works through
-six steps:
+its steps:
 
 1. **Symlinks this repo to `~/.dotfiles`**, unless the repo already is `~/.dotfiles`.
 2. **Checks the username.** It compares the `user = "john"` line in `flake.nix` with your actual
@@ -405,9 +405,9 @@ git add -A
 git commit -m "add htop"
 ```
 
-Two files will usually show up as modified and should **not** be committed back to a fork you
-share: `flake.nix`, which now carries your username and machine name, and
-`hardware-configuration.nix`, which now describes your hardware. Both are yours. See
+`flake.nix`, which now carries your username and machine name, and
+`hardware-configuration.nix`, which now describes your hardware, will usually show up as modified
+and should **not** be committed back to a fork you share. Both are yours. See
 [`git status` Shows Changes You Never Made](#git-status-shows-changes-you-never-made) for the
 files that a *tool* changed, which is a different situation with a different remedy.
 
@@ -636,7 +636,7 @@ step, which is the only part that wanted `sudo`.
 
 ### Adding Work-Specific Configuration
 
-Two untracked files in your home directory, outside this repo, are already wired into
+Some untracked files in your home directory, outside this repo, are already wired into
 `home.nix`. A work git identity goes in `~/.gitconfig.local` with the commands in
 [Setting the Git Identity](#setting-the-git-identity). Environment variables and aliases go in
 `~/.zshrc.local`:
@@ -784,7 +784,7 @@ the key in the tracked file if it is a preference you mean to keep.
 
 ### A pull conflicts with your own machine's files
 
-`git pull` refuses when an incoming commit touches a file you have uncommitted changes in. Two
+`git pull` refuses when an incoming commit touches a file you have uncommitted changes in. Some
 files here are yours and must never be restored from git:
 
 - `flake.nix`, which `bootstrap.sh` rewrote with your username and machine name. Restoring it

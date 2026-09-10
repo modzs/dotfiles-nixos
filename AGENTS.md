@@ -129,6 +129,17 @@ Deliberate decisions in this repo - do NOT silently revert them:
   them. `bootstrap.sh` still rewrites `flake.nix` through a temp file and a rename, because that
   is atomic for a file the machine's identity depends on, and because it lets the suite exercise
   the real script rather than skipping it.
+- **`tests/pi-calm.test.sh` asserts the `~/.pi/agent/extensions` Home Manager link against the
+  tracked `home.nix` text, and that is a deliberate, settled exception** to this repo's general
+  preference for executing behaviour over reading source. An evaluated form has to reach
+  `home.file.".pi/agent/extensions".source.drvAttrs.buildCommand`: `mkOutOfStoreSymlink` is a
+  `pkgs.runCommandLocal` (home-manager `modules/files.nix`), so the repo path it links to exists
+  only inside that derivation's build command, and `drvAttrs` stops carrying it as soon as nixpkgs
+  flips `structuredAttrsByDefault` - today `false` by default in
+  `pkgs/stdenv/generic/make-derivation.nix`. Such a check would go red for a reason that has
+  nothing to do with the link it claims to test, while the text assertion covers the same contract
+  against a surface that does not move. This has been proposed and declined more than once; do not
+  replace it with an evaluated one.
 - A procedure must not be stated in two documents: one owns it, and the other keeps the context
   and the warnings and cross-references the owner instead of repeating the steps - a duplicated
   recipe is how a bug once got fixed in one copy and missed in the other. HOW-TO.md owns

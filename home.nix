@@ -132,8 +132,8 @@ in
   # GNOME's counterparts to the handful of macOS defaults this setup came from.
   # dconf is the real database GNOME reads, so declaring keys here is the same
   # mechanism the Settings app writes through - not a file GNOME might ignore.
-  # Four of the original macOS settings have no GNOME equivalent and are
-  # deliberately absent rather than approximated; README.md lists them.
+  # The original macOS settings with no GNOME equivalent are deliberately
+  # absent rather than approximated; README.md lists them.
   dconf.settings = {
     "org/gnome/desktop/interface" = {
       # Dark mode. color-scheme is what GTK4/libadwaita apps follow;

@@ -91,6 +91,14 @@ test_nixpkgs_supplied_packages_are_all_prebuilt() {
     skip "binary cache coverage of the installed packages (nix not found)"
     return 0
   fi
+  # Nix is present, but this repo needs the flakes and nix-command features that
+  # a stock nix.conf still gates. Probe for them separately, so a machine that
+  # cannot evaluate flakes at all reports `skip -` rather than blaming the
+  # configuration for its own inability to read it.
+  if ! nix flake metadata --no-write-lock-file "$ROOT" >/dev/null 2>&1; then
+    skip "binary cache coverage of the installed packages (this nix cannot read a flake - nix-command and flakes not enabled?)"
+    return 0
+  fi
   if ! curl -sf --max-time 30 -o /dev/null https://cache.nixos.org/nix-cache-info; then
     skip "binary cache coverage of the installed packages (cache.nixos.org unreachable)"
     return 0

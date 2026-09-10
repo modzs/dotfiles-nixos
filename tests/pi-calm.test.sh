@@ -28,13 +28,9 @@ dotfiles_test_parse_args "$@"
 TMP_ROOT=$(dotfiles_test_tmproot pi-calm)
 CALM_DIR="$ROOT/home/.pi/agent/extensions/calm"
 PI_PACKAGE_DIR=${PI_CALM_TEST_PACKAGE_DIR:-"$(npm root -g 2>/dev/null)/@earendil-works/pi-coding-agent"}
-TMUX_SOCKET="pi-calm-test-$$"
 TMUX_SESSION="pi-calm-e2e"
 
 cleanup() {
-  if command -v tmux >/dev/null 2>&1; then
-    tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
-  fi
   if [ "${KEEP_TMP:-}" = 1 ]; then
     printf 'kept disposable Pi Calm evidence: %s\n' "$TMP_ROOT" >&2
     return

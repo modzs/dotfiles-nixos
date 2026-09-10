@@ -6,6 +6,8 @@
 # TOML and JSON parsers decide what herdr's and Pi's config files declare.
 #
 # Coverage:
+# - every script the documentation tells a reader to run as ./script is
+#   executable in git's index, which is what a fresh clone actually gets;
 # - the herdr runtime artifacts (~/.config/herdr is an out-of-store symlink
 #   into this repo, so everything herdr writes lands in the working tree);
 # - the one key herdr writes into its own tracked config.toml;
@@ -17,6 +19,85 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 dotfiles_test_parse_args "$@"
+
+# --- documented scripts must be runnable from a fresh clone -------------------
+#
+# A file's executable bit lives in git's index, not just in a working tree, and
+# a clone gets whatever the index says. `bootstrap.sh` and `rebuild.sh` were both
+# committed 100644 once, so the very first command HOW-TO.md gives a new reader -
+# `./bootstrap.sh` - died with "permission denied" (exit 126) on every fresh
+# clone, while working perfectly for the author, whose local chmod never had to
+# be recorded anywhere.
+#
+# The list of scripts is derived from the documents rather than hardcoded here,
+# so a newly documented script is covered the day it is documented and this check
+# cannot quietly fall behind the docs. `git ls-files -s` is git's own answer,
+# which is the thing a clone reads.
+
+test_documented_scripts_are_executable_in_the_index() {
+  local report status=0
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    skip "documented scripts executable in the index (python3 not found)"
+    return 0
+  fi
+
+  # stderr is folded in: python reports the offending paths through sys.exit,
+  # so without this the failure below would name no file.
+  #
+  # Single-quoted on purpose: the body below is a Python program, and the shell
+  # must not expand anything inside it.
+  # shellcheck disable=SC2016
+  report=$(cd "$ROOT" && git ls-files -s | python3 -c '
+import re, subprocess, sys
+
+# Every `./path` token inside a fenced code block of a document a reader is
+# pointed at. Fenced blocks only: prose mentions a script without telling anyone
+# to run it, and `$(dirname "$0")` style paths inside the scripts are not docs.
+DOCS = ("README.md", "HOW-TO.md", "CONTRIBUTING.md")
+TOKEN = re.compile(r"(?<![\w./])\./([\w./-]+)")
+
+modes = {}
+for line in sys.stdin.read().splitlines():
+    meta, _, path = line.partition("\t")
+    modes[path] = meta.split()[0]
+
+wanted = {}
+for doc in DOCS:
+    try:
+        text = open(doc, encoding="utf-8").read()
+    except FileNotFoundError:
+        continue
+    fenced = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if line.strip().startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced:
+            continue
+        for match in TOKEN.finditer(line):
+            candidate = match.group(1).rstrip(".,;:)")
+            if candidate in modes:
+                wanted.setdefault(candidate, "%s:%d" % (doc, lineno))
+
+if not wanted:
+    sys.exit("no ./script invocations found in the documentation at all")
+
+bad = [
+    "%s is %s in the index but %s tells the reader to run it" % (path, modes[path], where)
+    for path, where in sorted(wanted.items())
+    if modes[path] != "100755"
+]
+if bad:
+    sys.exit("; ".join(bad))
+print("%d documented script(s) checked" % len(wanted))
+' 2>&1) || status=$?
+
+  [ "$status" -eq 0 ] \
+    || fail "a script the documentation tells you to run is not executable in git's index, so it fails with permission denied on a fresh clone: $report - fix with: git update-index --chmod=+x <path>"
+
+  pass "repo: every documented ./script is executable in the index ($report)"
+}
 
 # --- herdr runtime artifacts --------------------------------------------------
 #
@@ -199,9 +280,10 @@ test_pi_declares_only_immutable_npm_pins() {
   pass "pi: every declared package source is an immutable npm pin"
 }
 
+test_documented_scripts_are_executable_in_the_index
 test_herdr_runtime_artifacts_never_dirty_the_repo
 test_herdr_config_declares_onboarding
 test_claude_settings_declare_no_machine_local_paths
 test_pi_declares_only_immutable_npm_pins
 
-test_summary 4
+test_summary 5

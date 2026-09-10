@@ -132,15 +132,39 @@ sudo mount -o umask=077 /dev/disk/by-label/boot /mnt/boot
 sudo swapon /dev/sda2
 ```
 
-Generate a starting configuration for this machine, then install it. `nixos-generate-config`
+Generate a starting configuration for this machine, then edit it. `nixos-generate-config`
 inspects the hardware and writes two files under `/mnt/etc/nixos`: `hardware-configuration.nix`,
 which describes the disks and drivers it found, and `configuration.nix`, a commented starting
-point. Open `configuration.nix` and uncomment `boot.loader.systemd-boot.enable = true;` before
-installing.
+point.
 
 ```bash
 sudo nixos-generate-config --root /mnt
 sudo nano /mnt/etc/nixos/configuration.nix
+```
+
+Two edits before you install. Uncomment the boot loader line, which the template leaves off:
+
+```nix
+boot.loader.systemd-boot.enable = true;
+```
+
+And uncomment the user account block, changing `alice` to the username you want. `wheel` is what
+gives you `sudo`, which Part 2 needs:
+
+```nix
+users.users.alice = {
+  isNormalUser = true;
+  extraGroups = [ "wheel" ];
+};
+```
+
+This account is not throwaway. The `user` line in this repo's `flake.nix` names the same
+username, so declaring it here means the switch in Part 2 takes the account over rather than
+creating a second one.
+
+Then install:
+
+```bash
 sudo nixos-install
 ```
 
@@ -152,23 +176,20 @@ sudo reboot
 
 ### Step 4: Log in and give your user a password
 
-Log in as `root` if the graphical installer did not create your user for you, and give yourself
-an account and a password. Replace `john` with your username throughout:
+The graphical installer sets a password for the account it created, so if you used it, log in
+and skip to Part 2.
+
+After a manual install, the account you declared exists but has no password. Log in as `root`
+with the password `nixos-install` asked for, and set one - replacing `john` with your username:
 
 ```bash
-sudo useradd -m -G wheel john
-sudo passwd john
+passwd john
 ```
 
-If the installer already created your account, only the password may be missing:
-
-```bash
-sudo passwd john
-```
-
-This repo declares the user account but deliberately declares no password for it - a password
-hash committed to a public repository is a credential handed to everyone who clones it. The
-account's password is set here, on the machine, and NixOS leaves it alone from then on.
+This repo declares the user account too, but deliberately declares no password for it: a
+password hash committed to a public repository is a credential handed to everyone who clones it.
+`users.mutableUsers` stays at its NixOS default, so the password you set here is yours and no
+switch overwrites it.
 
 ---
 
@@ -297,23 +318,26 @@ unsure whether something needs one, just run it.
 
 `build` does everything `switch` does except change the running system. It is worth running
 after an edit you are unsure about, because a switch that fails halfway is more to reason about
-than a build that never ran:
+than a build that never ran. It needs no `sudo`, because it activates nothing:
 
 ```bash
 cd ~/.dotfiles
-sudo nixos-rebuild build --flake ~/.dotfiles#pc
+nixos-rebuild build --flake ~/.dotfiles#pc
 ```
+
+That leaves a `result` symlink in the current directory pointing at the system it built. It is
+gitignored, and the next garbage collection removes what it points at once you delete it.
 
 To see only what *would* be downloaded or compiled, without building any of it:
 
 ```bash
-sudo nixos-rebuild dry-build --flake ~/.dotfiles#pc
+nixos-rebuild dry-build --flake ~/.dotfiles#pc
 ```
 
-And to see how the new system differs from the running one, package by package:
+And to see how the new system would differ from the running one, package by package:
 
 ```bash
-sudo nixos-rebuild build --flake ~/.dotfiles#pc --diff
+nixos-rebuild build --flake ~/.dotfiles#pc --diff
 ```
 
 ### Worked example: adding one package, start to finish
@@ -397,10 +421,11 @@ Roll the running system back one generation:
 sudo nixos-rebuild switch --rollback
 ```
 
-To see what you would be rolling back to, list the generations first:
+To see what you would be rolling back to, list the generations first. This one only reads, so it
+needs no `sudo` either:
 
 ```bash
-sudo nixos-rebuild list-generations
+nixos-rebuild list-generations
 ```
 
 The active one is marked as current. Each line is a whole system: kernel version, NixOS version,
@@ -713,6 +738,10 @@ switch you have not lived with yet. Deleting generations does not free space on 
 removes the references, and the store paths go with them in the same run. After either command,
 the boot menu is rewritten on your next switch, so run `./rebuild.sh` to prune the stale entries.
 
+`nixos-rebuild build` leaves a `result` symlink behind, and anything it points at is protected
+from garbage collection until you delete the symlink. Remove stale ones before running the
+commands above.
+
 ### Command not found after a switch
 
 Your shell captured its environment when it started. Open a new terminal, or:
@@ -793,8 +822,8 @@ sudo nixos-rebuild switch --rollback
 
 **Key commands:**
 - `./rebuild.sh` - apply configuration changes
-- `sudo nixos-rebuild build --flake ~/.dotfiles#pc` - build without applying
-- `sudo nixos-rebuild list-generations` - see what you can roll back to
+- `nixos-rebuild build --flake ~/.dotfiles#pc` - build without applying
+- `nixos-rebuild list-generations` - see what you can roll back to
 - `nix search nixpkgs <name>` - find a package's attribute name
 - `nix flake update` - move the pinned package versions
 - `dconf watch /` - find the key behind a GNOME setting

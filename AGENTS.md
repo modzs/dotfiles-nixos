@@ -149,22 +149,34 @@ Deliberate decisions in this repo - do NOT silently revert them:
   nothing to do with the link it claims to test, while the text assertion covers the same contract
   against a surface that does not move. This has been proposed and declined more than once; do not
   replace it with an evaluated one.
-- **The body and assertions of `test_real_pi_tui_smoke` in `tests/pi-calm.test.sh` are deliberately
-  kept byte-identical to the copy in the sibling
+- **The assertions and waiting behaviour of `test_real_pi_tui_smoke` in `tests/pi-calm.test.sh` are
+  deliberately kept identical to the copy in the sibling
   [modzs/dotfiles](https://github.com/modzs/dotfiles) repo.** That function exercises the vendored
   Calm extension both repos ship, so improving it in only one of them makes two copies of the same
-  test silently disagree about what that extension guarantees - worse than either flaw below. The
-  parity rule covers that one function and nothing else: the rest of this file is ordinary local
-  code, and it deliberately does not match the sibling. The sibling's `wait_for_text` helper and
-  the file-scope tmux socket that helper needs are both absent here, because nothing outside the
-  frozen function uses them - "this file does not match the sibling" is therefore not a defect.
+  test silently disagree about what that extension guarantees - worse than either flaw below. What
+  is frozen is what the function asserts and how long it waits: the same checks, the same loop
+  counts, the same sleeps, the same break conditions and the same failure messages. A change to any
+  of those belongs in the sibling repo first, and then in both.
+  The one deliberate divergence is the retry loops' variable name: they are `for _ in $(seq 1 120)`
+  here where the sibling writes `for i in ...`, and this function's `local` line does not declare
+  `i`. Nothing reads that counter - the loops mean "try up to 120 times", not "count" - and the
+  only thing keeping the sibling's `i` from tripping shellcheck's SC2034 is its uncalled
+  `wait_for_text` helper, which this repo does not carry. Do not "restore parity" by renaming them
+  back, do not import that helper to quiet the linter, and do not paper over it with a
+  `# shellcheck disable=SC2034`. `.github/workflows/ci.yml`'s lint job runs shellcheck over
+  `tests/*.sh` and would go red.
+  The parity rule covers that one function's assertions and waiting behaviour and nothing else: the
+  rest of this file is ordinary local code, and it deliberately does not match the sibling. The
+  sibling's `wait_for_text` helper and the file-scope tmux socket that helper needs are both absent
+  here, because nothing outside the frozen function uses them - "this file does not match the
+  sibling" is therefore not a defect.
   Two flaws inside the function are known and accepted: (a) it opens its own tmux server on a
   function-local `socket="pi-calm-smoke-$$"` and kills it only on the happy path, and no EXIT trap
   covers that socket, so a mid-test failure leaves the server and its `pi` process behind - on an
   ephemeral CI runner they die with the job; (b) `tmux` re-wraps a pane on a width change rather
   than clearing it, so the post-resize `grep -Fq '\__/'` can match the boat row drawn before the
   resize, which means the check does not strictly prove Calm repainted. Both have been raised and
-  declined. A change to the function belongs in the sibling repo first, and then in both.
+  declined.
 - A procedure must not be stated in two documents: one owns it, and the other keeps the context
   and the warnings and cross-references the owner instead of repeating the steps - a duplicated
   recipe is how a bug once got fixed in one copy and missed in the other. HOW-TO.md owns

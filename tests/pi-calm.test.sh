@@ -549,7 +549,7 @@ JS
 }
 
 test_real_pi_tui_smoke() {
-  local fixture agent project socket pane i
+  local fixture agent project socket pane
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     skip "real Pi TUI smoke in tmux (pi or tmux not found)"
     return 0
@@ -621,7 +621,7 @@ TS
 
   tmux -L "$socket" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
     "cd '$project' && env PI_CODING_AGENT_DIR='$agent' PI_CODING_AGENT_SESSION_DIR='$fixture/sessions' PI_OFFLINE=1 CALM_SMOKE_MARKERS='$fixture/provider-markers.txt' pi --approve --no-context-files --no-skills --no-prompt-templates -e ./provider.ts"
-  for i in $(seq 1 120); do
+  for _ in $(seq 1 120); do
     tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'provider.ts' "$fixture/pane" && break
     sleep 0.05
@@ -634,7 +634,7 @@ TS
   capture_tui after-calm
   tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
   tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
-  for i in $(seq 1 120); do
+  for _ in $(seq 1 120); do
     if [ -f "$fixture/provider-markers.txt" ] && grep -Fq 'stream-start' "$fixture/provider-markers.txt"; then
       capture_tui working-wide
       tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/wide" 2>/dev/null || true
@@ -645,7 +645,7 @@ TS
   grep -Fq 'stream-start' "$fixture/provider-markers.txt" || fail "real Pi smoke did not enter the provider stream"
   grep -Fq '\__/' "$fixture/wide" || fail "real Pi smoke did not show Calm's wide working boat"
   tmux -L "$socket" resize-window -t "$TMUX_SESSION" -x 40 -y 30
-  for i in $(seq 1 120); do
+  for _ in $(seq 1 120); do
     capture_tui working-narrow
     tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/narrow" 2>/dev/null || true
     grep -Fq '\__/' "$fixture/narrow" && break
@@ -653,7 +653,7 @@ TS
     sleep 0.02
   done
   grep -Fq '\__/' "$fixture/narrow" || fail "real Pi smoke did not reflow Calm's working boat on resize"
-  for i in $(seq 1 120); do
+  for _ in $(seq 1 120); do
     tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'CALM_SMOKE_GENUINE_ASSISTANT' "$fixture/pane" && break
     sleep 0.05

@@ -10,7 +10,7 @@
 #
 # The sentinel on the first line is what marks the file as unreal. bootstrap.sh
 # reads it to decide whether replacing this file would destroy a real machine's
-# generated config, and tests/hardware-placeholder.test.sh asserts it is still
+# generated config, and tests/hardware-config.test.sh asserts it is still
 # here. Do not remove that line while the file is still a placeholder, and do
 # not add it to a generated one.
 #

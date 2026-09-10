@@ -31,8 +31,9 @@
 # - the hardware seam in step 5: the tracked placeholder replaced by what
 #   nixos-generate-config prints, and a generator failure stopping the run
 #   before the switch rather than after it;
-# - the preflight for a machine that is not NixOS: refused before any prompt and
-#   before anything is written, and silent on a machine that has the tooling.
+# - the preflight for a machine missing a tool the script cannot do without -
+#   the NixOS tooling, and git: refused before any prompt and before anything is
+#   written, and silent on a machine that has all three.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -127,9 +128,9 @@ SHIM
 }
 HWEOF
 
-  # bootstrap.sh's preflight only asks whether these two exist; the sudo shim
-  # above is what actually answers for them. A <sb>/drop-nixos-tools file makes
-  # them vanish, which is the machine the preflight is about: not NixOS.
+  # bootstrap.sh's preflight only asks whether these exist; the sudo shim above
+  # is what actually answers for them. A case that removes them is testing the
+  # machine the preflight is about: one that is not NixOS.
   cat >"$sb/bin/nixos-rebuild" <<SHIM
 #!/bin/sh
 echo "nixos-rebuild \$*" >>"$sb/calls.log"
@@ -1016,8 +1017,47 @@ test_preflight_refuses_a_machine_without_nixos_tooling() {
   pass "preflight: a machine without nixos-rebuild is refused before anything is written"
 }
 
-# The negative half of the case above, and the only claim it makes: every other
-# case already drives bootstrap this way and asserts it reaches the switch.
+# --- preflight: this machine has no git ---------------------------------------
+#
+# git is the third tool bootstrap.sh cannot do without, and the only one a user
+# following HOW-TO.md can plausibly arrive without: a fresh NixOS has none until
+# this configuration's first switch installs one, so the guide opens
+# `nix-shell -p git` for the clone. Step 4 writes the identity with
+# `git config --file` and keeps git's exit status rather than aborting, and the
+# report after the switch reads it back the same way - so without this guard the
+# run would survive a missing git, write nothing, and then describe a machine
+# whose config is fine as unreadable.
+
+test_preflight_refuses_a_machine_without_git() {
+  local sb status nogit
+  sb=$(make_sandbox)
+  # The NixOS shims plus `dirname`, the one external utility bootstrap.sh runs
+  # before its preflight, and nothing else - so the only thing missing from this
+  # PATH is git.
+  nogit="$sb/nogit"
+  mkdir -p "$nogit"
+  ln -s "$(command -v dirname)" "$nogit/dirname"
+  status=$(run_bootstrap "$sb" repo $'\n' "$sb/bin:$nogit")
+
+  [ "$status" != 0 ] || fail "bootstrap ran on a machine with no git: $(sandbox_out "$sb")"
+  assert_contains "$(sandbox_out "$sb")" "\"git\" is not on this machine's PATH" \
+    "bootstrap did not say that git was the tool it could not find"
+  assert_contains "$(sandbox_out "$sb")" "nix-shell -p git" \
+    "bootstrap did not tell the reader where to get git"
+  assert_not_contains "$(sandbox_out "$sb")" "Step 1" \
+    "bootstrap started changing the machine before refusing"
+  [ ! -e "$sb/home/.dotfiles" ] \
+    || fail "bootstrap linked ~/.dotfiles on a machine it then refused"
+  [ ! -e "$sb/home/.gitconfig.local" ] \
+    || fail "bootstrap wrote an identity file on a machine it then refused"
+  [ -z "$(sandbox_calls "$sb")" ] \
+    || fail "bootstrap ran something before refusing: $(sandbox_calls "$sb")"
+
+  pass "preflight: a machine without git is refused before anything is written"
+}
+
+# The negative half of the two cases above, and the only claim it makes: every
+# other case already drives bootstrap this way and asserts it reaches the switch.
 test_preflight_stays_quiet_on_a_machine_with_the_tooling() {
   local sb
   sb=$(make_sandbox)
@@ -1067,6 +1107,7 @@ test_rebuild_preserves_the_switch_exit_status
 test_bootstrap_replaces_the_placeholder_hardware_file
 test_bootstrap_stops_before_the_switch_when_hardware_generation_fails
 test_preflight_refuses_a_machine_without_nixos_tooling
+test_preflight_refuses_a_machine_without_git
 test_preflight_stays_quiet_on_a_machine_with_the_tooling
 
-test_summary 37
+test_summary 38

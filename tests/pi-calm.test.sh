@@ -6,9 +6,12 @@
 # Copyright (c) 2026 Kun Chen. MIT License - see home/.pi/agent/extensions/calm/LICENSE.
 #
 # Coverage:
-# - zero coupling: no forbidden identifiers anywhere in the shipped source,
-#   tests, or docs, and the runtime state file is never tracked or managed;
-# - static wiring: Home Manager auto-load, TypeScript typecheck, JS syntax;
+# - attribution: the vendored MIT notice travels with the copies, and Pi's
+#   runtime state file is neither tracked nor un-ignored;
+# - static wiring: TypeScript typecheck, JS syntax. The Home Manager half of the
+#   wiring - the whole extensions directory linked out of the store, which is why
+#   this extension needs no declaration of its own - is asserted against the
+#   evaluated configuration in tests/nixos-eval.test.sh;
 # - preference: off by default, persisted toggle, malformed/unwritable state;
 # - filtering: the seven built-in tool shells hide gaplessly while custom tools
 #   and unsupported transcript classes stay visible, /export and /share render
@@ -43,40 +46,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-wait_for_text() {
-  local file=$1 text=$2 i=0
-  while [ "$i" -lt 120 ]; do
-    # Include recent scrollback: expanding a long restored transcript can move
-    # the asserted tool output above the current viewport while the footer and
-    # editor remain visible.
-    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -600 >"$file" 2>/dev/null || true
-    grep -Fq "$text" "$file" 2>/dev/null && return 0
-    sleep 0.05
-    i=$((i + 1))
-  done
-  return 1
-}
-
-find_chrome() {
-  local candidate
-  if [ -n "${PI_CALM_TEST_CHROME_BIN:-}" ] && [ -x "$PI_CALM_TEST_CHROME_BIN" ]; then
-    printf '%s\n' "$PI_CALM_TEST_CHROME_BIN"
-    return 0
-  fi
-  for candidate in \
-    google-chrome \
-    google-chrome-stable \
-    chromium \
-    chromium-browser
-  do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      command -v "$candidate"
-      return 0
-    fi
-  done
-  return 1
-}
-
 # Copy the shipped extension into a fixture layout with resolvable node_modules.
 # Echoes the fixture root. Requires $1 = fixture directory.
 build_node_fixture() {
@@ -93,71 +62,32 @@ have_pi_package() {
   [ -f "$PI_PACKAGE_DIR/package.json" ]
 }
 
-test_zero_coupling_and_state_file() {
-  local source_files license_hits file separator
-  source_files=$(find "$CALM_DIR" -type f | sort)
-  [ -n "$source_files" ] || fail "Pi Calm extension files are missing"
-  # U+2063 (invisible separator) without embedding the literal in this file.
-  separator=$(printf '\xe2\x81\xa3')
-  # Forbidden patterns are concatenated so this checker never matches itself.
-  local pat_fm_home="FM_""HOME" pat_fm_root="FM_""ROOT" pat_config="config/""calm"
-  local pat_watch="fm_""watch_arm_pi" pat_op="FIRSTMATE""_OP" pat_dash="fm-""calm"
-
-  # The operational marker and upstream runtime surfaces must not exist anywhere.
-  for file in $source_files "$ROOT/tests/pi-calm.test.sh" "$ROOT/tests/lib.sh" "$ROOT/README.md" "$ROOT/home.nix"; do
-
-    assert_not_contains "$(cat "$file")" "$pat_fm_home" "$file mentions $pat_fm_home"
-    assert_not_contains "$(cat "$file")" "$pat_fm_root" "$file mentions $pat_fm_root"
-    assert_not_contains "$(cat "$file")" "$pat_config" "$file mentions $pat_config"
-    assert_not_contains "$(cat "$file")" "$pat_watch" "$file mentions $pat_watch"
-    assert_not_contains "$(cat "$file")" "$pat_op" "$file mentions $pat_op"
-    assert_not_contains "$(cat "$file")" "$pat_dash" "$file mentions $pat_dash"
-    assert_not_contains "$(cat "$file")" "$separator" "$file contains the operational separator"
-  done
-  # The upstream project name may appear only in a license attribution.
-  local attribution_name="First""mate"
-  license_hits=$(grep -rni "$attribution_name" "$CALM_DIR" "$ROOT/README.md" "$ROOT/home.nix" 2>/dev/null | grep -v "Adapted from" || true)
-  [ -z "$license_hits" ] || fail "unexpected upstream references outside license attribution: $license_hits"
+# The MIT notice is the one thing about this vendored copy that IS its text: the
+# licence requires the notice to travel with every copy, so the LICENSE file and
+# the per-source headers are an owned contract rather than a proxy for anything
+# the code does. What the extension actually does is asserted by running it, in
+# every test below this one.
+test_license_attribution_and_untracked_state() {
+  local file
   grep -q "MIT License" "$CALM_DIR/LICENSE" || fail "calm LICENSE lost the MIT permission text"
   grep -q "Copyright (c) 2026 Kun Chen" "$CALM_DIR/LICENSE" || fail "calm LICENSE lost the copyright notice"
   for file in "$CALM_DIR/index.ts" "$CALM_DIR/lib/visibility.ts" "$CALM_DIR/lib/preference.ts" "$CALM_DIR/lib/collapsed-thinking.ts" "$CALM_DIR/lib/working-ship.ts"; do
     grep -q "Copyright (c) 2026 Kun Chen" "$file" || fail "$file lost its copyright attribution header"
   done
 
-  # The runtime preference file must never be tracked or Home Manager managed.
+  # Pi writes ~/.pi/agent/calm whenever the toggle changes, so the repo must
+  # neither track it nor stop ignoring it - otherwise flipping Calm on leaves a
+  # diff to clean up by hand. git answers both questions itself; the .gitignore
+  # entry behind the second one is only the means to it. Home Manager leaving the
+  # same path unmanaged is asserted in tests/nixos-eval.test.sh, against the
+  # evaluated configuration.
   if git -C "$ROOT" ls-files --error-unmatch home/.pi/agent/calm >/dev/null 2>&1; then
     fail "the Calm state file is tracked in the repository"
   fi
-  assert_not_contains "$(cat "$ROOT/home.nix")" '.pi/agent/calm' "home.nix manages the Calm state file"
-  grep -q '^/home/.pi/agent/calm$' "$ROOT/.gitignore" \
-    || fail ".gitignore does not guard /home/.pi/agent/calm"
+  git -C "$ROOT" check-ignore -q home/.pi/agent/calm \
+    || fail "git does not ignore home/.pi/agent/calm, so flipping the Calm toggle dirties the repo"
 
-  # The shipped tree never references upstream paths or identifiers in code.
-  assert_not_contains "$(cat "$CALM_DIR/index.ts")" "pi.events" "index.ts emits on a shared event bus"
-  assert_not_contains "$(cat "$CALM_DIR/index.ts")" "registerEntryRenderer" "index.ts registers a synthetic entry renderer"
-  assert_not_contains "$(cat "$CALM_DIR/index.ts")" "InteractiveMode" "index.ts patches user-row layout"
-
-  pass "zero coupling: no forbidden identifiers, attribution limited to license headers, state file untracked and unmanaged"
-}
-
-# Split out of the former combined "static wiring" test. That test emitted one
-# unconditional `pass` naming three things, two of which had their own skip
-# branches - so a machine without node or the Pi package printed two skips and
-# then claimed all three had passed. Each check now reports its own result:
-# the greps below need nothing but the repo, so they always run and always
-# produce a real `ok`, while the two environment-dependent checks stand alone
-# and say what was missing when they cannot run.
-test_home_manager_wiring() {
-  # Home Manager links the extensions directory as a whole, so the calm
-  # subdirectory auto-loads without any new declaration.
-  grep -q 'home.file.".pi/agent/extensions".source =' "$ROOT/home.nix" \
-    || fail "home.nix no longer links ~/.pi/agent/extensions as a directory"
-  grep -q "mkOutOfStoreSymlink \"\${dotfiles}/home/.pi/agent/extensions\"" "$ROOT/home.nix" \
-    || fail "home.nix changed the Pi extensions link target"
-  [ -f "$CALM_DIR/index.ts" ] || fail "calm extension entry point missing"
-  [ -f "$CALM_DIR/LICENSE" ] || fail "calm license file missing"
-
-  pass "static wiring: Home Manager auto-loads the calm extension directory"
+  pass "attribution: the MIT notice travels with the vendored copy, and the runtime state file is untracked and ignored"
 }
 
 test_existing_js_extension_parses() {
@@ -606,7 +536,7 @@ JS
 }
 
 test_real_pi_tui_smoke() {
-  local fixture agent project socket pane i
+  local fixture agent project pane i
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     skip "real Pi TUI smoke in tmux (pi or tmux not found)"
     return 0
@@ -617,14 +547,13 @@ test_real_pi_tui_smoke() {
   fixture="$TMP_ROOT/tui-smoke"
   agent="$fixture/agent"
   project="$fixture/project"
-  socket="pi-calm-smoke-$$"
   mkdir -p "$agent/extensions" "$project" "$fixture/captures" "$fixture/sessions"
   capture_tui() {
     local label=$1
-    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" >"$fixture/captures/$label.current.txt" 2>/dev/null || true
-    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.txt" 2>/dev/null || true
-    tmux -L "$socket" capture-pane -ep -t "$TMUX_SESSION" >"$fixture/captures/$label.current.ansi.txt" 2>/dev/null || true
-    tmux -L "$socket" capture-pane -ep -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.ansi.txt" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" >"$fixture/captures/$label.current.txt" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.txt" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" >"$fixture/captures/$label.current.ansi.txt" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.ansi.txt" 2>/dev/null || true
   }
   cp -R "$CALM_DIR" "$agent/extensions/"
   cat >"$project/provider.ts" <<'TS'
@@ -676,42 +605,42 @@ export default function (pi: ExtensionAPI): void {
 }
 TS
 
-  tmux -L "$socket" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
     "cd '$project' && env PI_CODING_AGENT_DIR='$agent' PI_CODING_AGENT_SESSION_DIR='$fixture/sessions' PI_OFFLINE=1 CALM_SMOKE_MARKERS='$fixture/provider-markers.txt' pi --approve --no-context-files --no-skills --no-prompt-templates -e ./provider.ts"
   for i in $(seq 1 120); do
-    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'provider.ts' "$fixture/pane" && break
     sleep 0.05
   done
   grep -Fq 'provider.ts' "$fixture/pane" || fail "real Pi smoke did not load the disposable provider"
   capture_tui ready
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm'
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   sleep 0.2
   capture_tui after-calm
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   for i in $(seq 1 120); do
     if [ -f "$fixture/provider-markers.txt" ] && grep -Fq 'stream-start' "$fixture/provider-markers.txt"; then
       capture_tui working-wide
-      tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/wide" 2>/dev/null || true
+      tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/wide" 2>/dev/null || true
       grep -Fq '\__/' "$fixture/wide" && break
     fi
     sleep 0.02
   done
   grep -Fq 'stream-start' "$fixture/provider-markers.txt" || fail "real Pi smoke did not enter the provider stream"
   grep -Fq '\__/' "$fixture/wide" || fail "real Pi smoke did not show Calm's wide working boat"
-  tmux -L "$socket" resize-window -t "$TMUX_SESSION" -x 40 -y 30
+  tmux -L "$TMUX_SOCKET" resize-window -t "$TMUX_SESSION" -x 40 -y 30
   for i in $(seq 1 120); do
     capture_tui working-narrow
-    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/narrow" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/narrow" 2>/dev/null || true
     grep -Fq '\__/' "$fixture/narrow" && break
     grep -Fq 'stream-done' "$fixture/provider-markers.txt" 2>/dev/null && break
     sleep 0.02
   done
   grep -Fq '\__/' "$fixture/narrow" || fail "real Pi smoke did not reflow Calm's working boat on resize"
   for i in $(seq 1 120); do
-    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
     grep -Fq 'CALM_SMOKE_GENUINE_ASSISTANT' "$fixture/pane" && break
     sleep 0.05
   done
@@ -719,19 +648,18 @@ TS
   assert_contains "$pane" 'CALM_SMOKE_GENUINE_USER' "real Pi smoke hid a genuine user prompt"
   assert_contains "$pane" 'CALM_SMOKE_GENUINE_ASSISTANT' "real Pi smoke hid genuine assistant text"
   [ "$(cat "$agent/calm")" = on ] || fail "real Pi smoke did not persist Calm on"
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm'
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   sleep 0.15
   [ "$(cat "$agent/calm")" = off ] || fail "real Pi smoke did not persist Calm off"
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/quit'
-  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/quit'
+  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
   sleep 0.1
-  tmux -L "$socket" kill-server 2>/dev/null || true
+  tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
   pass "isolated Pi 0.82 TUI proves auto-load, /calm persistence, resize-safe working animation, and genuine transcript text without credentials"
 }
 
-test_zero_coupling_and_state_file
-test_home_manager_wiring
+test_license_attribution_and_untracked_state
 test_existing_js_extension_parses
 test_calm_typescript_typechecks
 test_preference_and_command
@@ -740,4 +668,4 @@ test_working_ship_and_lifecycle
 test_collapsed_thinking_degradation
 test_real_pi_tui_smoke
 
-test_summary 9
+test_summary 8

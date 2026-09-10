@@ -212,8 +212,9 @@ Cloning to `~/.dotfiles` is the simplest arrangement, because that is the path e
 resolves through. Cloning anywhere else works too - `bootstrap.sh` makes `~/.dotfiles` a symlink
 to wherever you put it.
 
-You can leave the `nix-shell` (type `exit`) once the clone is done; the rest of this part does
-not need git. After the switch in Step 3, git is installed for real and always there.
+Stay in that `nix-shell` for the rest of Part 2. `bootstrap.sh` needs git too - it writes your
+git identity with git itself - and it refuses up front if git is not on your `PATH`. After the
+switch in Step 3, git is installed for real and always there, so that is the point to `exit`.
 
 ### Step 2: Review the configuration before you run it
 
@@ -237,7 +238,8 @@ This is somebody else's machine described in a file. Read these before applying 
 ```
 
 It refuses immediately, before writing anything, if `~/.dotfiles` is already something else, or
-if this is not a NixOS machine. Then it works through six steps:
+if `nixos-rebuild`, `nixos-generate-config` or `git` is not on your `PATH`. Then it works through
+six steps:
 
 1. **Symlinks this repo to `~/.dotfiles`**, unless the repo already is `~/.dotfiles`.
 2. **Checks the username.** It compares the `user = "john"` line in `flake.nix` with your actual
@@ -339,6 +341,10 @@ And to see how the new system would differ from the running one, package by pack
 ```bash
 nixos-rebuild build --flake ~/.dotfiles#pc --diff
 ```
+
+The comparison is always against the system running right now, so run this *before* you apply a
+change. Run it just after a switch and it reports no differences, because the thing it just built
+is the thing already running.
 
 ### Worked example: adding one package, start to finish
 

@@ -58,16 +58,31 @@ else
 fi
 
 # The other thing worth refusing before any prompt: this script drives NixOS
-# tooling, and on anything else every step after the symlink would fail one at a
-# time with a different error.
-echo "==> Preflight: this is NixOS"
-for required in nixos-rebuild nixos-generate-config; do
-  if ! command -v "$required" >/dev/null 2>&1; then
-    echo "    \"$required\" is not on this machine's PATH."
-    echo "    This repository configures NixOS, and it expects NixOS to be"
-    echo "    installed already. See \"Part 1: Install NixOS\" in HOW-TO.md."
-    exit 1
-  fi
+# tooling and git, and without one of them every step after the symlink would
+# fail one at a time with a different error. git is as load-bearing as the two
+# NixOS tools and absent for a different reason: step 4 writes the identity with
+# `git config --file` and the report after the switch reads it back, while a
+# fresh NixOS has no git at all until this configuration's first switch installs
+# one. Both of those read git's exit status rather than aborting, so a missing
+# binary would not stop the run - it would reach the end and describe a machine
+# that was never written to.
+echo "==> Preflight: the tools this script needs"
+for required in nixos-rebuild nixos-generate-config git; do
+  command -v "$required" >/dev/null 2>&1 && continue
+  echo "    \"$required\" is not on this machine's PATH."
+  case $required in
+    git)
+      echo "    A fresh NixOS has no git until this configuration's first switch"
+      echo "    installs one, and step 4 needs it to write your identity. Run this"
+      echo "    from the same \"nix-shell -p git\" you cloned with - see"
+      echo "    \"Part 2: Hand the Machine to This Repo\" in HOW-TO.md."
+      ;;
+    *)
+      echo "    This repository configures NixOS, and it expects NixOS to be"
+      echo "    installed already. See \"Part 1: Install NixOS\" in HOW-TO.md."
+      ;;
+  esac
+  exit 1
 done
 echo "    ok"
 

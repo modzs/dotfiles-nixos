@@ -33,10 +33,10 @@ NixOS inverts this. There is one file that says what the machine is, and a comma
 the machine match the file. Four consequences follow, and they are the whole reason for the
 extra learning:
 
-**Packages are declared, not installed.** `htop` is not on this machine because somebody once
-ran `apt install htop`; it is here because `home.nix` lists it. Delete the line, rebuild, and it
-is gone - along with anything it dragged in, because nothing else claims those. There is no
-equivalent of "I think I installed that for something once".
+**Packages are declared, not installed.** `ripgrep` is not on this machine because somebody
+once ran `apt install ripgrep`; it is here because `home.nix` lists it. Delete the line,
+rebuild, and it is gone - along with anything it dragged in, because nothing else claims those.
+There is no equivalent of "I think I installed that for something once".
 
 **Nothing is installed on top of anything else.** Every package lives in its own directory under
 `/nix/store`, named after a hash of its exact inputs - source, compiler, dependencies, build

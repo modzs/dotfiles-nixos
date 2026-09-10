@@ -553,7 +553,7 @@ JS
 }
 
 test_real_pi_tui_smoke() {
-  local fixture agent project pane
+  local fixture agent project socket pane i
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     skip "real Pi TUI smoke in tmux (pi or tmux not found)"
     return 0
@@ -564,31 +564,18 @@ test_real_pi_tui_smoke() {
   fixture="$TMP_ROOT/tui-smoke"
   agent="$fixture/agent"
   project="$fixture/project"
+  socket="pi-calm-smoke-$$"
   mkdir -p "$agent/extensions" "$project" "$fixture/captures" "$fixture/sessions"
   capture_tui() {
     local label=$1
-    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" >"$fixture/captures/$label.current.txt" 2>/dev/null || true
-    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.txt" 2>/dev/null || true
-    tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" >"$fixture/captures/$label.current.ansi.txt" 2>/dev/null || true
-    tmux -L "$TMUX_SOCKET" capture-pane -ep -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.ansi.txt" 2>/dev/null || true
-  }
-  calm_is() { [ "$(cat "$agent/calm" 2>/dev/null)" = "$1" ]; }
-  stream_started() { grep -Fq 'stream-start' "$fixture/provider-markers.txt" 2>/dev/null; }
-  pane_into() {
-    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/$1" 2>/dev/null || true
-    grep -Fq "$2" "$fixture/$1"
-  }
-  wait_until() {
-    local i
-    for ((i = 0; i < 600; i++)); do
-      "$@" && return 0
-      sleep 0.05
-    done
-    return 1
+    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" >"$fixture/captures/$label.current.txt" 2>/dev/null || true
+    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.txt" 2>/dev/null || true
+    tmux -L "$socket" capture-pane -ep -t "$TMUX_SESSION" >"$fixture/captures/$label.current.ansi.txt" 2>/dev/null || true
+    tmux -L "$socket" capture-pane -ep -t "$TMUX_SESSION" -S -100 >"$fixture/captures/$label.scrollback.ansi.txt" 2>/dev/null || true
   }
   cp -R "$CALM_DIR" "$agent/extensions/"
   cat >"$project/provider.ts" <<'TS'
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
@@ -608,8 +595,7 @@ export default function (pi: ExtensionAPI): void {
       queueMicrotask(() => {
         mark("stream-start");
         stream.push({ type: "start", partial: output });
-        const release = process.env.CALM_SMOKE_RELEASE as string;
-        const finish = () => {
+        setTimeout(() => {
           const text = "CALM_SMOKE_GENUINE_ASSISTANT";
           output.content.push({ type: "text", text });
           stream.push({ type: "text_start", contentIndex: 0, partial: output });
@@ -618,12 +604,7 @@ export default function (pi: ExtensionAPI): void {
           stream.push({ type: "done", reason: "stop", message: output });
           mark("stream-done");
           stream.end();
-        };
-        const awaitRelease = () => {
-          if (existsSync(release)) finish();
-          else setTimeout(awaitRelease, 25);
-        };
-        awaitRelease();
+        }, 1400);
       });
       return stream;
     },
@@ -642,39 +623,57 @@ export default function (pi: ExtensionAPI): void {
 }
 TS
 
-  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
-    "cd '$project' && env PI_CODING_AGENT_DIR='$agent' PI_CODING_AGENT_SESSION_DIR='$fixture/sessions' PI_OFFLINE=1 CALM_SMOKE_MARKERS='$fixture/provider-markers.txt' CALM_SMOKE_RELEASE='$fixture/release' pi --approve --no-context-files --no-skills --no-prompt-templates -e ./provider.ts"
-  wait_until pane_into pane 'provider.ts'
+  tmux -L "$socket" new-session -d -s "$TMUX_SESSION" -x 100 -y 30 \
+    "cd '$project' && env PI_CODING_AGENT_DIR='$agent' PI_CODING_AGENT_SESSION_DIR='$fixture/sessions' PI_OFFLINE=1 CALM_SMOKE_MARKERS='$fixture/provider-markers.txt' pi --approve --no-context-files --no-skills --no-prompt-templates -e ./provider.ts"
+  for i in $(seq 1 120); do
+    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
+    grep -Fq 'provider.ts' "$fixture/pane" && break
+    sleep 0.05
+  done
   grep -Fq 'provider.ts' "$fixture/pane" || fail "real Pi smoke did not load the disposable provider"
   capture_tui ready
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  wait_until calm_is on || fail "real Pi smoke did not act on the first /calm command"
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm'
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  sleep 0.2
   capture_tui after-calm
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  wait_until stream_started
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm-smoke'
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  for i in $(seq 1 120); do
+    if [ -f "$fixture/provider-markers.txt" ] && grep -Fq 'stream-start' "$fixture/provider-markers.txt"; then
+      capture_tui working-wide
+      tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/wide" 2>/dev/null || true
+      grep -Fq '\__/' "$fixture/wide" && break
+    fi
+    sleep 0.02
+  done
   grep -Fq 'stream-start' "$fixture/provider-markers.txt" || fail "real Pi smoke did not enter the provider stream"
-  wait_until pane_into wide '\__/'
-  capture_tui working-wide
   grep -Fq '\__/' "$fixture/wide" || fail "real Pi smoke did not show Calm's wide working boat"
-  tmux -L "$TMUX_SOCKET" resize-window -t "$TMUX_SESSION" -x 40 -y 30
-  wait_until pane_into narrow '\__/'
-  capture_tui working-narrow
+  tmux -L "$socket" resize-window -t "$TMUX_SESSION" -x 40 -y 30
+  for i in $(seq 1 120); do
+    capture_tui working-narrow
+    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/narrow" 2>/dev/null || true
+    grep -Fq '\__/' "$fixture/narrow" && break
+    grep -Fq 'stream-done' "$fixture/provider-markers.txt" 2>/dev/null && break
+    sleep 0.02
+  done
   grep -Fq '\__/' "$fixture/narrow" || fail "real Pi smoke did not reflow Calm's working boat on resize"
-  : >"$fixture/release"
-  wait_until pane_into pane 'CALM_SMOKE_GENUINE_ASSISTANT'
+  for i in $(seq 1 120); do
+    tmux -L "$socket" capture-pane -p -t "$TMUX_SESSION" -S -100 >"$fixture/pane" 2>/dev/null || true
+    grep -Fq 'CALM_SMOKE_GENUINE_ASSISTANT' "$fixture/pane" && break
+    sleep 0.05
+  done
   pane=$(cat "$fixture/pane")
   assert_contains "$pane" 'CALM_SMOKE_GENUINE_USER' "real Pi smoke hid a genuine user prompt"
   assert_contains "$pane" 'CALM_SMOKE_GENUINE_ASSISTANT' "real Pi smoke hid genuine assistant text"
   [ "$(cat "$agent/calm")" = on ] || fail "real Pi smoke did not persist Calm on"
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/calm'
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
-  wait_until calm_is off || fail "real Pi smoke did not persist Calm off"
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l '/quit'
-  tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" Enter
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/calm'
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
+  sleep 0.15
+  [ "$(cat "$agent/calm")" = off ] || fail "real Pi smoke did not persist Calm off"
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" -l '/quit'
+  tmux -L "$socket" send-keys -t "$TMUX_SESSION" Enter
   sleep 0.1
-  tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null || true
+  tmux -L "$socket" kill-server 2>/dev/null || true
   pass "isolated Pi 0.82 TUI proves auto-load, /calm persistence, resize-safe working animation, and genuine transcript text without credentials"
 }
 

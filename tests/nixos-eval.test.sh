@@ -20,10 +20,7 @@
 # - the configured user's home is a Linux /home path, not the /Users path this
 #   configuration was converted from;
 # - that user's login shell is the zsh the system module enables, and that the
-#   system put it in /etc/shells, which is the only reason NixOS accepts it;
-# - the home/ directory is linked into the home directory out of the store, so
-#   editing a file in this repo changes the running configuration, while Pi's
-#   runtime state file is left unmanaged.
+#   system put it in /etc/shells, which is the only reason NixOS accepts it.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -87,8 +84,6 @@ collect_facts() {
       "loginShellPath\t${shell}/bin/${shell.pname or "?"}"
       "systemZsh\t${if cfg.config.programs.zsh.enable then "true" else "false"}"
       "etcShells\t${builtins.concatStringsSep ":" (map toString cfg.config.environment.shells)}"
-      "homeFiles\t${builtins.concatStringsSep ":" (builtins.attrNames hm.home.file)}"
-      "piExtensionsLink\t${hm.home.file.".pi/agent/extensions".source.drvAttrs.buildCommand or "?"}"
       "stateVersion\t${cfg.config.system.stateVersion}"
     ]'
 
@@ -196,43 +191,11 @@ test_login_shell_is_zsh() {
   pass "nixos: the user's login shell is zsh, and the system offers it in /etc/shells"
 }
 
-# --- the home/ files are live links back into this repo -----------------------
-#
-# README.md's central trade: everything under home/ is an out-of-store symlink,
-# so editing a file there changes the running configuration with no rebuild. A
-# plain Home Manager file would evaluate just as happily and silently take that
-# away. The Pi extensions entry is the directory-shaped case: the whole directory
-# is linked, which is the only reason a new extension inside it needs no new
-# declaration.
-
-test_home_files_link_out_of_the_store_into_this_repo() {
-  local user
-  if [ -n "$FACTS_SKIP" ]; then
-    skip "home/ out-of-store link wiring ($FACTS_SKIP)"
-    return 0
-  fi
-  [ -z "$FACTS_ERROR" ] || fail "the configuration did not evaluate, so nothing could be read from it"
-
-  user=$(fact user)
-  assert_contains ":$(fact homeFiles):" ":.pi/agent/extensions:" \
-    "Home Manager no longer manages ~/.pi/agent/extensions"
-  assert_contains "$(fact piExtensionsLink)" "/home/$user/.dotfiles/home/.pi/agent/extensions" \
-    "~/.pi/agent/extensions is not an out-of-store symlink back into this repo: $(fact piExtensionsLink)"
-  # Pi writes its Calm toggle to ~/.pi/agent/calm at runtime. Managed, it would
-  # be a read-only store path Pi could not write, and the repo would gain an
-  # unexplained diff every time the toggle changed.
-  assert_not_contains ":$(fact homeFiles):" ":.pi/agent/calm:" \
-    "Home Manager manages ~/.pi/agent/calm, which Pi writes at runtime"
-
-  pass "nixos: home/ is linked out of the store into ~/.dotfiles, and Pi's runtime state is unmanaged"
-}
-
 collect_facts
 
 test_configuration_evaluates_to_a_system_derivation
 test_flake_hostname_reaches_the_system
 test_home_directory_is_a_linux_path
 test_login_shell_is_zsh
-test_home_files_link_out_of_the_store_into_this_repo
 
-test_summary 5
+test_summary 4

@@ -85,8 +85,8 @@ Running the switch builds:
 - NixOS already installed on it. This repo configures a NixOS machine; it does not install one.
   [Part 1: Install NixOS](HOW-TO.md#part-1-install-nixos) walks through the standard installer.
 - Network access on the first switch, and on any switch that changes a pinned npm CLI version.
-- Two tools this repo does not install for you, both documented in
-  [Part 6](HOW-TO.md#part-6-customizing-your-setup): `herdr` and `no-mistakes`.
+- `herdr` and `no-mistakes`, which this repo does not install for you. Both are documented in
+  [Part 6](HOW-TO.md#part-6-customizing-your-setup).
 - Of the three agents the installed configs are for - Claude, Codex, opencode - only Claude Code
   itself is installed. The Codex and opencode configs are written either way, so they are ready
   if you install those tools yourself; until then the `co` alias for `codex` has nothing to run.

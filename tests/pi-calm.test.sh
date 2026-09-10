@@ -7,11 +7,8 @@
 #
 # Coverage:
 # - attribution: the vendored MIT notice travels with the copies, and Pi's
-#   runtime state file is neither tracked nor un-ignored;
-# - static wiring: TypeScript typecheck, JS syntax. The Home Manager half of the
-#   wiring - the whole extensions directory linked out of the store, which is why
-#   this extension needs no declaration of its own - is asserted against the
-#   evaluated configuration in tests/nixos-eval.test.sh;
+#   runtime state file is git-ignored, untracked, and unmanaged;
+# - static wiring: Home Manager auto-load, TypeScript typecheck, JS syntax;
 # - preference: off by default, persisted toggle, malformed/unwritable state;
 # - filtering: the seven built-in tool shells hide gaplessly while custom tools
 #   and unsupported transcript classes stay visible, /export and /share render
@@ -77,17 +74,37 @@ test_license_attribution_and_untracked_state() {
 
   # Pi writes ~/.pi/agent/calm whenever the toggle changes, so the repo must
   # neither track it nor stop ignoring it - otherwise flipping Calm on leaves a
-  # diff to clean up by hand. git answers both questions itself; the .gitignore
-  # entry behind the second one is only the means to it. Home Manager leaving the
-  # same path unmanaged is asserted in tests/nixos-eval.test.sh, against the
-  # evaluated configuration.
+  # diff to clean up by hand. git answers both of those itself; the .gitignore
+  # entry behind the second is only the means to it. Home Manager must not own
+  # the path either: a managed file is a read-only store path Pi cannot write.
   if git -C "$ROOT" ls-files --error-unmatch home/.pi/agent/calm >/dev/null 2>&1; then
     fail "the Calm state file is tracked in the repository"
   fi
   git -C "$ROOT" check-ignore -q home/.pi/agent/calm \
     || fail "git does not ignore home/.pi/agent/calm, so flipping the Calm toggle dirties the repo"
+  assert_not_contains "$(cat "$ROOT/home.nix")" '.pi/agent/calm' "home.nix manages the Calm state file"
 
-  pass "attribution: the MIT notice travels with the vendored copy, and the runtime state file is untracked and ignored"
+  pass "attribution: the MIT notice travels with the vendored copy, and the runtime state file is untracked, ignored, and unmanaged"
+}
+
+# Split out of the former combined "static wiring" test. That test emitted one
+# unconditional `pass` naming three things, two of which had their own skip
+# branches - so a machine without node or the Pi package printed two skips and
+# then claimed all three had passed. Each check now reports its own result:
+# the greps below need nothing but the repo, so they always run and always
+# produce a real `ok`, while the two environment-dependent checks stand alone
+# and say what was missing when they cannot run.
+test_home_manager_wiring() {
+  # Home Manager links the extensions directory as a whole, so the calm
+  # subdirectory auto-loads without any new declaration.
+  grep -q 'home.file.".pi/agent/extensions".source =' "$ROOT/home.nix" \
+    || fail "home.nix no longer links ~/.pi/agent/extensions as a directory"
+  grep -q "mkOutOfStoreSymlink \"\${dotfiles}/home/.pi/agent/extensions\"" "$ROOT/home.nix" \
+    || fail "home.nix changed the Pi extensions link target"
+  [ -f "$CALM_DIR/index.ts" ] || fail "calm extension entry point missing"
+  [ -f "$CALM_DIR/LICENSE" ] || fail "calm license file missing"
+
+  pass "static wiring: Home Manager auto-loads the calm extension directory"
 }
 
 test_existing_js_extension_parses() {
@@ -660,6 +677,7 @@ TS
 }
 
 test_license_attribution_and_untracked_state
+test_home_manager_wiring
 test_existing_js_extension_parses
 test_calm_typescript_typechecks
 test_preference_and_command
@@ -668,4 +686,4 @@ test_working_ship_and_lifecycle
 test_collapsed_thinking_degradation
 test_real_pi_tui_smoke
 
-test_summary 8
+test_summary 9

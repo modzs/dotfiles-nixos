@@ -267,11 +267,8 @@ This repo is mine. If you fork it, review these before you run `bootstrap.sh`:
   keyboard. Neither is guessed from your machine.
 - **Packages and GNOME settings**: `home.nix` for user packages, shell, and dconf;
   `configuration.nix` for the system and the GNOME applications that get excluded.
-- **Default browser**: `home.nix` installs both Firefox and Chromium, and declares Firefox as the
-  application that answers `http` and `https`. Leaving that undeclared would hand the choice to
-  GIO's ordering rather than to this repo; the comment beside it says why the choice went the way
-  it did. Changing it is one line and a `./rebuild.sh`, because the file Home Manager writes for it
-  is a read-only store symlink that GNOME Settings cannot edit.
+- **Default browser**: `home.nix` installs both Firefox and Chromium and declares no default
+  handler, so the browser a link opens is whichever one you pick in GNOME Settings.
 
 **Heads-up:**
 

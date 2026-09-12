@@ -143,24 +143,18 @@ Deliberate decisions in this repo - do NOT silently revert them:
   upstream's own lazy.nvim README shows both - which is why this keeps being proposed. The
   mechanism, and what a `cmd` stub actually costs here, is recorded beside the spec in
   `home/.config/nvim/lua/plugins/markdown.lua`.
-- **`firefox` and `chromium` are both installed, and Firefox is the declared `http`/`https`
-  handler.** The repo owner asked for both. Until they arrived the machine had no browser at all -
-  `configuration.nix` excludes GNOME Web and nothing replaced it - so `xdg-open` existed but had
-  nothing to hand a URL to, and `markdown-preview.nvim` served a page that never opened. The
-  handler is declared rather than left alone because both browsers' desktop files claim
-  `x-scheme-handler/http`, and glib resolves an undeclared default by walking a GHashTable of
-  registered apps (`desktop_file_dir_unindexed_get_all`) whose order nothing here controls;
-  `g_app_info_get_default_for_type_impl` reads the `[Default Applications]` entries first, so
-  declaring it is what makes the answer this repo's. Firefox rather than Chromium because
-  `chrome-devtools-axi`, one of the pinned npm CLIs, drives a Chromium-family browser for agent
-  work, and the default handler should not land every ordinary link in the browser agents are
-  automating. `tests/nixos-eval.test.sh` guards the whole shape, and it deliberately matches the
-  desktop id against package names by prefix rather than exactly, so flipping the default to
-  `chromium-browser.desktop` stays a one-line change. Reading the desktop file itself would be
-  import from derivation, which that suite does not do.
-  Do NOT answer this with `g:mkdp_browser`: the point is that every link on the machine resolves,
-  not just the preview. One cost is accepted - home-manager writes `~/.config/mimeapps.list` as a
-  store symlink, so GNOME Settings cannot change the default at runtime.
+- **`firefox` and `chromium` are both installed, and NO default `http`/`https` handler is
+  declared - both halves are deliberate.** The repo owner asked for both browsers. Until they
+  arrived the machine had none at all - `configuration.nix` excludes GNOME Web and nothing
+  replaced it - so `xdg-open` existed but had nothing to hand a URL to, and
+  `markdown-preview.nvim` served a page that never opened. The default is left undeclared because
+  declaring it through `xdg.mimeApps` makes `~/.config/mimeapps.list` a read-only store symlink,
+  which takes the choice away from GNOME Settings on the owner's own desktop; a default he can
+  change there is worth more here than one this repo decides. The cost is understood and accepted:
+  with no `[Default Applications]` entry, glib answers from its own registered-apps ordering, which
+  nothing here controls, so which browser opens a link is GNOME's business rather than this repo's.
+  Do NOT add `xdg.mimeApps`, `force = true`, `home-manager.backupFileExtension`, or a
+  `g:mkdp_browser` setting to make the answer deterministic - each has been proposed and declined.
 - Tests live in `tests/` and run with `./tests/run.sh` (`--strict` fails on any skipped check).
   A check that could not run must report `skip -`, never `ok -`; CI runs the strict form, so a
   new environment-dependent test needs its dependency added to `.github/workflows/ci.yml`.

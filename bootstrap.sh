@@ -239,7 +239,10 @@ hardware_config_apply "$DIR/hardware-configuration.nix" "    "
 echo "==> Step 6: first build and switch"
 # No bootstrapping dance is needed here, unlike on a fresh macOS: NixOS ships
 # nixos-rebuild, and the preflight above already refused a machine without it.
-# `sudo` finds it because /run/current-system/sw/bin is on NixOS's secure_path.
+# `sudo` finds it because NixOS sets no secure_path at all - its sudo is built
+# without --with-secure-path and the generated sudoers declares no Defaults for
+# it - so sudo keeps this shell's PATH, which carries /run/current-system/sw/bin
+# from environment.profiles. See AGENTS.md for why there is no guard here.
 sudo nixos-rebuild switch --flake "$HOME/.dotfiles#$CONFIG"
 
 # Only now is the answer final: the switch is what installs home.nix's include

@@ -47,7 +47,10 @@ in
     # presents is Wayland, so wl-clipboard is the provider Neovim will use.
     wl-clipboard
     # Node itself, so the version is declared and pinned by flake.lock rather
-    # than by whatever a distro package manager happens to ship.
+    # than by whatever a distro package manager happens to ship. It is also what
+    # markdown-preview.nvim's `build` step uses to compile its preview server
+    # from vendored sources, instead of downloading a prebuilt binary - see
+    # home/.config/nvim/lua/plugins/markdown.lua.
     nodejs_26
     # Desktop apps. On NixOS these are ordinary packages, so they sit in the
     # same list as everything else - there is no second package manager to
@@ -56,6 +59,15 @@ in
     wezterm
     ghostty
     claude-code
+    # The browsers. configuration.nix excludes GNOME Web and says a browser
+    # choice belongs here; this is that choice. Until now nothing made one, so
+    # the machine had no http handler at all - `xdg-open` existed (xdg-utils
+    # arrives with GNOME) but had nothing to hand a URL to, which among other
+    # things left markdown-preview.nvim serving a page that never opened.
+    # No default handler is declared for either of them, so which one a link
+    # opens is whatever GNOME Settings says.
+    firefox
+    chromium
   ];
   # Hack Nerd Font is declared system-wide in configuration.nix, so GDM and
   # every GTK app can resolve it by name too. Repeating it here would install

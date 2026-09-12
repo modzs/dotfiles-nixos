@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # run; nothing inside a file can notice the file itself disappearing from the
 # glob, so that count lives here. Change it in the same commit that adds or
 # removes a tests/*.test.sh.
-EXPECTED_SUITES=8
+EXPECTED_SUITES=9
 
 TALLY=$(mktemp "${TMPDIR:-/tmp}/dotfiles-test-tally.XXXXXX")
 trap 'rm -f "$TALLY"' EXIT

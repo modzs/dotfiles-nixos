@@ -797,6 +797,23 @@ Commit them on a local branch, or stash them, and pull. Do not `git checkout --`
 you already did, `bootstrap.sh` can regenerate the hardware file - it asks before replacing a
 real one - and Step 2 and Step 3 of Part 2 redo the `flake.nix` half.
 
+### Markdown Preview Opens Nothing
+
+`:MarkdownPreviewToggle` reports an error and no preview appears - every launch, on a machine
+where everything else works. The plugin ships a small Node server that is built once, when the
+plugin is installed. If that build failed at the time - no network, a flaky npm registry -
+nothing retries it, so the plugin stays installed and unusable.
+
+Rebuild it from inside Neovim:
+
+```vim
+:Lazy build markdown-preview.nvim
+```
+
+**What it does:**
+- Re-runs the one install step this plugin needs
+- Leaves every other plugin untouched
+
 ### Wi-Fi, sound, graphics, printers
 
 Hardware that this repo says nothing about is ordinary NixOS configuration, not a problem with

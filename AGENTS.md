@@ -40,7 +40,16 @@ Deliberate decisions in this repo - do NOT silently revert them:
   `missing-only` and runs on every switch, so it speaks only about a key git resolves to nothing.
   Keep that split in the one function - duplicating it into the two scripts is the drift this file
   exists to prevent. `rebuild.sh` therefore cannot become `exec sudo`; it keeps and re-raises the
-  switch's exit status.
+  switch's exit status, and reports the identity only when that status is 0 - after a failed switch
+  the last line has to be the failure, not friendly git advice.
+- **The sibling repo's guard for a missing rebuild tool is deliberately NOT carried over here.**
+  There, `rebuild.sh` resolves `darwin-rebuild`'s absolute path and hands sudo that path, because
+  nix-darwin *installs* `darwin-rebuild` and a shell opened before the first switch never learned
+  its PATH entry. NixOS has no such window: `nixos-rebuild` is in `environment.systemPackages` on a
+  stock install, `/run/current-system/sw` is the last `environment.profiles` entry so its `bin` is
+  on every login shell's PATH, and NixOS builds sudo with no `--with-secure-path` and writes no
+  `Defaults secure_path`, so sudo keeps the caller's PATH rather than replacing it. A guard here
+  could never fire, and `bootstrap.sh` step 6 already says so beside its own switch.
 - The `~/.dotfiles` link logic lives once, in `lib/dotfiles-link.sh`, and is sourced by both
   `bootstrap.sh` and `rebuild.sh`. Do not re-inline `ln -sfn "$DIR" ~/.dotfiles` in either script:
   that form silently links *into* an existing real `~/.dotfiles` directory and exits 0.
@@ -116,6 +125,36 @@ Deliberate decisions in this repo - do NOT silently revert them:
   out-of-store symlink, so an undeclared key lands as an unexplained diff. Declaring it leaves herdr
   nothing to write. `tests/repo-hygiene.test.sh` guards it with a real TOML parser, which is why the
   CI test job pins python3.
+- There is deliberately NO activation-time or rebuild-time `Lazy! sync`. The repo owner was offered
+  exactly that - a headless sync during the switch, so plugins are on disk when `./rebuild.sh`
+  finishes - and chose the existing behaviour instead: lazy.nvim fetches on the next `nvim` launch,
+  the same as every other plugin here. Adding a sync step to `rebuild.sh`, `bootstrap.sh` or a Home
+  Manager activation script reverses a decision he made, not an oversight.
+- `nvim-treesitter` is deliberately ABSENT, even though `render-markdown.nvim` renders through
+  tree-sitter. The `neovim` in `home.packages` bundles the `markdown` and `markdown_inline` parsers
+  it needs - verified against this repo's own nixpkgs pin, not inherited from the sibling repo's -
+  and because that nvim comes from the pinned nixpkgs, `flake.lock` pins those parsers with it,
+  whereas parsers `nvim-treesitter` compiles at runtime would be pinned by nothing here. Adding the
+  plugin would make the config LESS reproducible, not more. Anyone adding it anyway will find
+  `master` broken on the Neovim 0.12 this flake pins: render-markdown throws `attempt to call method
+  'range' (a nil value)` out of nvim-treesitter's injection predicate and places no marks at all, so
+  it would have to be `branch = 'main'` plus the `tree-sitter` CLI.
+- `markdown-preview.nvim` is declared with `ft` only and deliberately WITHOUT `cmd`, even though
+  upstream's own lazy.nvim README shows both - which is why this keeps being proposed. The
+  mechanism, and what a `cmd` stub actually costs here, is recorded beside the spec in
+  `home/.config/nvim/lua/plugins/markdown.lua`.
+- **`firefox` and `chromium` are both installed, and NO default `http`/`https` handler is
+  declared - both halves are deliberate.** The repo owner asked for both browsers. Until they
+  arrived the machine had none at all - `configuration.nix` excludes GNOME Web and nothing
+  replaced it - so `xdg-open` existed but had nothing to hand a URL to, and
+  `markdown-preview.nvim` served a page that never opened. The default is left undeclared because
+  declaring it through `xdg.mimeApps` makes `~/.config/mimeapps.list` a read-only store symlink,
+  which takes the choice away from GNOME Settings on the owner's own desktop; a default he can
+  change there is worth more here than one this repo decides. The cost is understood and accepted:
+  with no `[Default Applications]` entry, glib answers from its own registered-apps ordering, which
+  nothing here controls, so which browser opens a link is GNOME's business rather than this repo's.
+  Do NOT add `xdg.mimeApps`, `force = true`, `home-manager.backupFileExtension`, or a
+  `g:mkdp_browser` setting to make the answer deterministic - each has been proposed and declined.
 - Tests live in `tests/` and run with `./tests/run.sh` (`--strict` fails on any skipped check).
   A check that could not run must report `skip -`, never `ok -`; CI runs the strict form, so a
   new environment-dependent test needs its dependency added to `.github/workflows/ci.yml`.

@@ -20,7 +20,9 @@
 # - the configured user's home is a Linux /home path, not the /Users path this
 #   configuration was converted from;
 # - that user's login shell is the zsh the system module enables, and that the
-#   system put it in /etc/shells, which is the only reason NixOS accepts it.
+#   system put it in /etc/shells, which is the only reason NixOS accepts it;
+# - the browser a link opens is decided by this repo rather than by GIO's
+#   hash-table ordering, and the application it names is actually installed.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -85,6 +87,10 @@ collect_facts() {
       "systemZsh\t${if cfg.config.programs.zsh.enable then "true" else "false"}"
       "etcShells\t${builtins.concatStringsSep ":" (map toString cfg.config.environment.shells)}"
       "stateVersion\t${cfg.config.system.stateVersion}"
+      "mimeAppsEnabled\t${if hm.xdg.mimeApps.enable then "true" else "false"}"
+      "httpHandler\t${builtins.concatStringsSep ";" (hm.xdg.mimeApps.defaultApplications."x-scheme-handler/http" or [])}"
+      "httpsHandler\t${builtins.concatStringsSep ";" (hm.xdg.mimeApps.defaultApplications."x-scheme-handler/https" or [])}"
+      "homePackages\t${builtins.concatStringsSep ":" (map (p: p.pname or p.name or "?") hm.home.packages)}"
     ]'
 
   FACTS=$(nix eval --raw --no-write-lock-file --apply "$expr" \
@@ -191,11 +197,67 @@ test_login_shell_is_zsh() {
   pass "nixos: the user's login shell is zsh, and the system offers it in /etc/shells"
 }
 
+# --- one browser answers a link, and it is installed --------------------------
+#
+# Two browsers here declare `x-scheme-handler/http` in their desktop files, and
+# GIO resolves an undeclared default by walking a GHashTable of registered apps
+# (glib's `desktop_file_dir_unindexed_get_all`), whose iteration order nothing
+# in this repo controls. `g_app_info_get_default_for_type_impl` consults the
+# `[Default Applications]` entries BEFORE those associations, so declaring the
+# handler is what turns a coin flip into a decision - and home.nix records why
+# the decision went to Firefox.
+#
+# The second half is the regression that would otherwise be silent: a handler
+# naming a desktop file no installed package ships is not an error anywhere, it
+# just falls back to the ordering this check exists to rule out.
+
+test_a_declared_browser_answers_http() {
+  local http https stem owner pkg
+  if [ -n "$FACTS_SKIP" ]; then
+    skip "default browser handler check ($FACTS_SKIP)"
+    return 0
+  fi
+  [ -z "$FACTS_ERROR" ] || fail "the configuration did not evaluate, so nothing could be read from it"
+
+  [ "$(fact mimeAppsEnabled)" = true ] \
+    || fail "xdg.mimeApps is disabled, so nothing writes a mimeapps.list and no default is declared at all"
+
+  http=$(fact httpHandler)
+  https=$(fact httpsHandler)
+  [ -n "$http" ] || fail "no application is declared for x-scheme-handler/http"
+  case $http in
+    *";"*) fail "x-scheme-handler/http names more than one application ('$http'), which decides nothing" ;;
+  esac
+  [ "$http" = "$https" ] \
+    || fail "http opens in '$http' but https opens in '$https' - a link's browser must not depend on its scheme"
+
+  # The handler has to belong to a package that is actually installed, or the
+  # declaration falls back to the ordering above without anything reporting it.
+  # Matching is by name, not by reading the desktop file: that would mean import
+  # from derivation, and this suite deliberately evaluates rather than builds.
+  # A package's own name is a prefix of the desktop id it ships rather than
+  # always equal to it - chromium ships `chromium-browser.desktop` - so an exact
+  # comparison would reject a perfectly good flip of this default to the other
+  # browser, which home.nix says should cost one line.
+  stem=${http%.desktop}
+  owner=""
+  for pkg in $(printf '%s\n' "$(fact homePackages)" | tr ':' ' '); do
+    case $stem in
+      "$pkg"|"$pkg"-*) owner=$pkg; break ;;
+    esac
+  done
+  [ -n "$owner" ] \
+    || fail "x-scheme-handler/http names $http, but no package in home.packages could ship it"
+
+  pass "nixos: http and https both open in $http, shipped by the installed $owner"
+}
+
 collect_facts
 
 test_configuration_evaluates_to_a_system_derivation
 test_flake_hostname_reaches_the_system
 test_home_directory_is_a_linux_path
 test_login_shell_is_zsh
+test_a_declared_browser_answers_http
 
-test_summary 4
+test_summary 5

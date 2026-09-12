@@ -143,15 +143,24 @@ Deliberate decisions in this repo - do NOT silently revert them:
   upstream's own lazy.nvim README shows both - which is why this keeps being proposed. The
   mechanism, and what a `cmd` stub actually costs here, is recorded beside the spec in
   `home/.config/nvim/lua/plugins/markdown.lua`.
-- **`markdown-preview.nvim` serves a page this configuration cannot open.** On Linux the plugin
-  spawns `xdg-open <url>` (`app/lib/util/opener.js`), and it only surfaces a *spawn* failure, so
-  everything downstream of that is silent. `xdg-open` does exist here - `xdg-utils` arrives with
-  GNOME - but it hands a URL to `gio open`, and this configuration installs no web browser at all:
-  `configuration.nix` excludes `epiphany` and `home.nix` declares no replacement. The server starts
-  and serves; nothing opens it. The precedent for closing a gap like this is the `wl-clipboard`
-  entry in `home.nix` - declare the Linux provider macOS supplied for free, and say in a comment
-  why - but which browser goes on this desktop is the repo owner's choice, not an agent's. Do not
-  pick one; ask.
+- **`firefox` and `chromium` are both installed, and Firefox is the declared `http`/`https`
+  handler.** The repo owner asked for both. Until they arrived the machine had no browser at all -
+  `configuration.nix` excludes GNOME Web and nothing replaced it - so `xdg-open` existed but had
+  nothing to hand a URL to, and `markdown-preview.nvim` served a page that never opened. The
+  handler is declared rather than left alone because both browsers' desktop files claim
+  `x-scheme-handler/http`, and glib resolves an undeclared default by walking a GHashTable of
+  registered apps (`desktop_file_dir_unindexed_get_all`) whose order nothing here controls;
+  `g_app_info_get_default_for_type_impl` reads the `[Default Applications]` entries first, so
+  declaring it is what makes the answer this repo's. Firefox rather than Chromium because
+  `chrome-devtools-axi`, one of the pinned npm CLIs, drives a Chromium-family browser for agent
+  work, and the default handler should not land every ordinary link in the browser agents are
+  automating. `tests/nixos-eval.test.sh` guards the whole shape, and it deliberately matches the
+  desktop id against package names by prefix rather than exactly, so flipping the default to
+  `chromium-browser.desktop` stays a one-line change. Reading the desktop file itself would be
+  import from derivation, which that suite does not do.
+  Do NOT answer this with `g:mkdp_browser`: the point is that every link on the machine resolves,
+  not just the preview. One cost is accepted - home-manager writes `~/.config/mimeapps.list` as a
+  store symlink, so GNOME Settings cannot change the default at runtime.
 - Tests live in `tests/` and run with `./tests/run.sh` (`--strict` fails on any skipped check).
   A check that could not run must report `skip -`, never `ok -`; CI runs the strict form, so a
   new environment-dependent test needs its dependency added to `.github/workflows/ci.yml`.

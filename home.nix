@@ -59,6 +59,14 @@ in
     wezterm
     ghostty
     claude-code
+    # The browsers. configuration.nix excludes GNOME Web and says a browser
+    # choice belongs here; this is that choice. Until now nothing made one, so
+    # the machine had no http handler at all - `xdg-open` existed (xdg-utils
+    # arrives with GNOME) but had nothing to hand a URL to, which among other
+    # things left markdown-preview.nvim serving a page that never opened.
+    # See xdg.mimeApps below for which of the two answers a link.
+    firefox
+    chromium
   ];
   # Hack Nerd Font is declared system-wide in configuration.nix, so GDM and
   # every GTK app can resolve it by name too. Repeating it here would install
@@ -130,6 +138,30 @@ in
     # ~/.gitconfig.local instead, which bootstrap.sh prompts for and this
     # include pulls in - the same file a work machine uses for its overrides.
     includes = [ { path = "~/.gitconfig.local"; } ];
+  };
+
+  # Which browser a link opens. Both packages above declare
+  # `x-scheme-handler/http` in their desktop files, and with no
+  # `[Default Applications]` entry the answer comes from GIO's registered-apps
+  # ordering rather than from anything declared here - so a preview, or any
+  # link, would open whichever of the two that ordering happened to surface.
+  # Declaring it is what makes the answer a property of this repo.
+  #
+  # Firefox rather than Chromium because `chrome-devtools-axi` - one of the
+  # pinned npm CLIs above - drives a Chromium-family browser over the DevTools
+  # protocol for agent work. Making Chromium the default handler would land
+  # every ordinary link, and every markdown preview, in the browser agents are
+  # automating. Chromium stays installed and one launcher click away.
+  #
+  # The cost: home-manager writes ~/.config/mimeapps.list as a store symlink,
+  # so GNOME Settings' "Default Applications" panel cannot change this at
+  # runtime. Flipping it means this one line and a ./rebuild.sh.
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "x-scheme-handler/http" = "firefox.desktop";
+      "x-scheme-handler/https" = "firefox.desktop";
+    };
   };
 
   # GNOME's counterparts to the handful of macOS defaults this setup came from.

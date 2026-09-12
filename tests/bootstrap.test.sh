@@ -28,6 +28,8 @@
 #   overriding file decides - which bootstrap.sh names and rebuild.sh keeps
 #   quiet about - and a failing switch whose exit status must survive the
 #   report;
+# - what rebuild.sh says after a failed switch: the failure, last, instead of
+#   the identity report's friendly advice;
 # - the hardware seam in step 5: the tracked placeholder replaced by what
 #   nixos-generate-config prints, and a generator failure stopping the run
 #   before the switch rather than after it;
@@ -926,10 +928,34 @@ test_rebuild_preserves_the_switch_exit_status() {
   status=$(run_rebuild "$sb")
 
   [ "$status" = 3 ] || fail "rebuild.sh returned $status instead of the switch's own status 3"
-  assert_contains "$(sandbox_out "$sb")" "git resolves no user.name and no user.email" \
-    "rebuild.sh skipped the identity report when the switch failed"
+  assert_contains "$(sandbox_out "$sb")" "Rebuild failed: 'sudo nixos-rebuild switch' exited 3" \
+    "rebuild.sh did not say the switch failed, or did not name its status"
 
-  pass "report: a failing switch keeps its exit status and is still reported on"
+  pass "report: a failing switch keeps its exit status and is named by it"
+}
+
+# The sandbox has no identity anywhere, so a successful switch here ends on the
+# "git resolves no user.name and no user.email" advice - see the case above
+# this section. That advice reads as a normal, healthy end to a run, which is
+# the last thing a rebuild that did not happen should look like.
+test_rebuild_failed_switch_does_not_end_on_the_identity_report() {
+  local sb status out
+  sb=$(make_sandbox)
+  printf '1\n' >"$sb/sudo-exit"
+  status=$(run_rebuild "$sb")
+  out=$(sandbox_out "$sb")
+
+  [ "$status" = 1 ] || fail "rebuild.sh returned $status instead of the switch's own status 1"
+  assert_not_contains "$out" "git resolves no user.name" \
+    "rebuild.sh printed the identity report after a switch that failed"
+  assert_contains "$out" "Rebuild failed" \
+    "rebuild.sh did not report the failed switch at all"
+  case "$(printf '%s\n' "$out" | tail -n 1)" in
+    *"re-run ./rebuild.sh"*) : ;;
+    *) fail "the last line after a failed switch was not about the failure: $out" ;;
+  esac
+
+  pass "report: a failed switch ends on the failure, not on friendly git advice"
 }
 
 # --- step 5: the hardware seam ------------------------------------------------
@@ -1104,10 +1130,11 @@ test_report_empty_value_in_the_managed_file_is_not_called_foreign
 test_report_config_git_cannot_read_repeats_gits_complaint
 test_rebuild_reports_one_key_at_a_time
 test_rebuild_preserves_the_switch_exit_status
+test_rebuild_failed_switch_does_not_end_on_the_identity_report
 test_bootstrap_replaces_the_placeholder_hardware_file
 test_bootstrap_stops_before_the_switch_when_hardware_generation_fails
 test_preflight_refuses_a_machine_without_nixos_tooling
 test_preflight_refuses_a_machine_without_git
 test_preflight_stays_quiet_on_a_machine_with_the_tooling
 
-test_summary 38
+test_summary 39

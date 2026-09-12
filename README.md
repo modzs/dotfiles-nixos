@@ -116,7 +116,9 @@ Supporting them:
 
 - `bootstrap.sh` - one-time setup on a newly installed NixOS: the `~/.dotfiles` link, the
   username, the machine name, the git identity, the real hardware description, and the first switch.
-- `rebuild.sh` - the everyday switch.
+- `rebuild.sh` - the everyday switch. It keeps the switch's own exit status and re-raises it, and
+  it reports on your git identity only when that status is 0: a switch that failed ends on the
+  failure, so the last line is never friendly git advice about a rebuild that did not happen.
 - `lib/` - the logic both scripts share, kept in files rather than inlined so the tests can
   execute it: the `~/.dotfiles` link, the git identity report, the pinned npm installs, and the
   hardware-configuration replacement.
@@ -394,6 +396,13 @@ after you authenticate Pi yourself.
 
 The first time you launch `nvim`, it bootstraps [lazy.nvim](https://github.com/folke/lazy.nvim)
 by cloning plugins from GitHub. That needs network access once; after that it is offline.
+One of them, `markdown-preview.nvim`, also builds its own preview server from vendored sources
+with the Node `home.nix` installs, so that first launch reaches the npm registry as well as
+GitHub. Nothing retries a build that failed, which is the one way a plugin here can end up
+installed but unusable - [Markdown Preview Opens Nothing](HOW-TO.md#markdown-preview-opens-nothing)
+has the fix. `./rebuild.sh` relinks this config, it does not fetch plugins, so a newly declared
+plugin arrives on the next `nvim` launch rather than at the end of a switch. `lazy-lock.json`
+pins every plugin to an exact revision.
 Neovim and WezTerm both use the rose-pine moon theme. Neovim keeps italics off and uses a
 transparent background so it matches the terminal setup. WezTerm's window transparency works on
 GNOME's Wayland session, which composites; the macOS-only background-blur option that the sibling

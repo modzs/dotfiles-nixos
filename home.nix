@@ -47,7 +47,10 @@ in
     # presents is Wayland, so wl-clipboard is the provider Neovim will use.
     wl-clipboard
     # Node itself, so the version is declared and pinned by flake.lock rather
-    # than by whatever a distro package manager happens to ship.
+    # than by whatever a distro package manager happens to ship. It is also what
+    # markdown-preview.nvim's `build` step uses to compile its preview server
+    # from vendored sources, instead of downloading a prebuilt binary - see
+    # home/.config/nvim/lua/plugins/markdown.lua.
     nodejs_26
     # Desktop apps. On NixOS these are ordinary packages, so they sit in the
     # same list as everything else - there is no second package manager to

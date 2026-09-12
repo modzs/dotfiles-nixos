@@ -67,8 +67,8 @@ same machine.
 
 Running the switch builds:
 
-- Nix user packages: CLI tools, Neovim, the terminals, Claude Code. `home.packages` in `home.nix`
-  is the list.
+- Nix user packages: CLI tools, Neovim, the terminals, the browsers, Claude Code. `home.packages`
+  in `home.nix` is the list.
 - Agent CLIs from npm (`gh-axi`, `chrome-devtools-axi`, `lavish-axi`, `tasks-axi`, `quota-axi`),
   pinned and installed into `~/.npm-global`
 - Shell (zsh, aliases, starship prompt), set as the login shell at system level

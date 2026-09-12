@@ -58,6 +58,14 @@ jobs:
   test:
     name: Test suite
     runs-on: ubuntu-latest
+    # The last main run finished this job in 67 seconds, before
+    # tests/nvim.test.sh existed; the flake-pinned Neovim fetch and the suite's
+    # twelve git clones go on top of that, and the suite itself finishes in
+    # seconds when the network is healthy. 20 minutes is roughly an order of
+    # magnitude of headroom over a healthy run - it is here to kill a clone that
+    # has hung, not to police how long a slow-but-working run takes. Without it
+    # the backstop is GitHub's six-hour default.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

@@ -195,9 +195,14 @@ test_a_file_that_does_not_load_is_named() {
 # neither `/usr/bin/true` nor `/bin/true` is a file this repo may assume: NixOS
 # creates only `/bin/sh` and `/usr/bin/env`, and the suite also has to run from
 # the Mac this repo is edited on.
-# And the network calls are not bounded: that same Mac ships no `timeout`, so
-# capping them would mean building a timer inside nvim. CI's job-level timeout
-# is the backstop, and a local run can be interrupted.
+# And the network calls are only half bounded: lazy caps its own git tasks at
+# 120 seconds (`Config.options.git.timeout`), which covers the plugin clones,
+# but not lazy.nvim's own bootstrap in home/.config/nvim/lua/plugin.lua - a
+# plain `vim.fn.system` git clone with no timer of its own, which would block
+# nvim's startup indefinitely on a stalled connection. The `timeout-minutes` on
+# CI's `test` job is what bounds that one, and a local run can be interrupted.
+# The suite builds no timer of its own because that same Mac ships no `timeout`,
+# so capping these calls here would mean building one inside nvim.
 
 test_markdown_plugins_and_pins_in_a_real_session() {
   local session config data mkdp evidence
